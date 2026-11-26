@@ -100,9 +100,49 @@ window.login = async function(){
 
  }
 
- message.textContent='تم تسجيل الدخول بنجاح. سنجهز أدوات الإدارة في الخطوة التالية.';
+ message.textContent='تم تسجيل الدخول بنجاح. سنجهز أدوات الإدارة في الخطوة 
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    const card = document.querySelector('.card');
 
-};
+    card.innerHTML = `
+      <h2>تعيين كلمة مرور جديدة</h2>
+      <input id="newPassword" type="password"
+        placeholder="كلمة المرور الجديدة">
+      <input id="confirmPassword" type="password"
+        placeholder="تأكيد كلمة المرور">
+      <button id="savePassword">حفظ كلمة المرور</button>
+      <p id="resetMessage"></p>
+    `;
+
+    document.getElementById('savePassword').onclick = async () => {
+      const password = document.getElementById('newPassword').value;
+      const confirm = document.getElementById('confirmPassword').value;
+      const msg = document.getElementById('resetMessage');
+
+      if (password.length < 8) {
+        msg.textContent = 'كلمة المرور لازم تكون 8 أحرف على الأقل';
+        return;
+      }
+
+      if (password !== confirm) {
+        msg.textContent = 'كلمتا المرور غير متطابقتين';
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: password
+      });
+
+      msg.textContent = error
+        ? 'حدث خطأ: ' + error.message
+        : 'تم تغيير كلمة المرور بنجاح!';
+    };
+  }
+});
+
+
+
 
 </script>
 
