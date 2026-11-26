@@ -1,0 +1,111 @@
+
+
+<!DOCTYPE html>
+
+<html lang="ar" dir="rtl">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>WALAA Beauty | لوحة الإدارة</title>
+
+<style>
+
+body{margin:0;background:#f8f3f6;font-family:Arial,sans-serif;color:#382536}
+
+header{background:#8e4778;color:white;padding:25px;text-align:center}
+
+main{max-width:500px;margin:30px auto;padding:20px}
+
+.card{background:white;padding:22px;border-radius:16px;box-shadow:0 3px 15px #0001}
+
+input,button{box-sizing:border-box;width:100%;padding:14px;margin:8px 0;border-radius:9px;border:1px solid #ddd;font-size:16px}
+
+button{background:#8e4778;color:white;border:0;font-weight:bold}
+
+#message{padding:10px}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>WALAA Beauty</h1>
+
+<p>لوحة تحكم الإدارة</p>
+
+</header>
+
+<main>
+
+<div class="card">
+
+<h2>تسجيل دخول المدير</h2>
+
+<input id="email" type="email" placeholder="البريد الإلكتروني">
+
+<input id="password" type="password" placeholder="كلمة المرور">
+
+<button onclick="login()">تسجيل الدخول</button>
+
+<p id="message"></p>
+
+</div>
+
+</main>
+
+<script type="module">
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'ضع_رابط_مشروعك_هنا';
+
+const SUPABASE_KEY = 'ضع_مفتاح_النشر_العام_هنا';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+window.login = async function(){
+
+ const message=document.getElementById('message');
+
+ const email=document.getElementById('email').value.trim();
+
+ const password=document.getElementById('password').value;
+
+ message.textContent='جارٍ التحقق...';
+
+ const {data,error}=await supabase.auth.signInWithPassword({email,password});
+
+ if(error){message.textContent='خطأ في تسجيل الدخول: '+error.message;return;}
+
+ const {data:admin,error:adminError}=await supabase
+
+ .from('store_admins').select('user_id')
+
+ .eq('user_id',data.user.id).maybeSingle();
+
+ if(adminError || !admin){
+
+  await supabase.auth.signOut();
+
+  message.textContent='هذا الحساب ليس لديه صلاحية الإدارة.';
+
+  return;
+
+ }
+
+ message.textContent='تم تسجيل الدخول بنجاح. سنجهز أدوات الإدارة في الخطوة التالية.';
+
+};
+
+</script>
+
+</body>
+
+</html>
