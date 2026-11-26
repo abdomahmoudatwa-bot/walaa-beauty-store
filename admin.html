@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 
 <html lang="ar" dir="rtl">
@@ -10,23 +8,23 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>WALAA Beauty | لوحة الإدارة</title>
+<title>WALAA Beauty - الإدارة</title>
 
 <style>
 
-body{margin:0;background:#f8f3f6;font-family:Arial,sans-serif;color:#382536}
+body{font-family:Arial;background:#f8f3f6;color:#382536;margin:0;padding:20px}
 
-header{background:#8e4778;color:white;padding:25px;text-align:center}
+header{text-align:center;background:#8e4778;color:white;padding:20px;border-radius:15px}
 
-main{max-width:500px;margin:30px auto;padding:20px}
+main{max-width:450px;margin:30px auto}
 
-.card{background:white;padding:22px;border-radius:16px;box-shadow:0 3px 15px #0001}
+.card{background:white;padding:22px;border-radius:15px}
 
-input,button{box-sizing:border-box;width:100%;padding:14px;margin:8px 0;border-radius:9px;border:1px solid #ddd;font-size:16px}
+input,button{box-sizing:border-box;width:100%;padding:14px;margin:9px 0;border:1px solid #ddd;border-radius:9px;font-size:16px}
 
 button{background:#8e4778;color:white;border:0;font-weight:bold}
 
-#message{padding:10px}
+#message{white-space:pre-wrap;overflow-wrap:anywhere}
 
 </style>
 
@@ -52,9 +50,9 @@ button{background:#8e4778;color:white;border:0;font-weight:bold}
 
 <input id="password" type="password" placeholder="كلمة المرور">
 
-<button onclick="login()">تسجيل الدخول</button>
+<button id="loginBtn">تسجيل الدخول</button>
 
-<p id="message"></p>
+<p id="message">جاري تحميل النظام...</p>
 
 </div>
 
@@ -62,87 +60,99 @@ button{background:#8e4778;color:white;border:0;font-weight:bold}
 
 <script type="module">
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const msg = document.getElementById('message');
 
-const SUPABASE_URL = 'https://gqzsrohssrzprfqxjajp.supabase.co';
+const btn = document.getElementById('loginBtn');
 
-const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+try {
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  msg.textContent = 'جاري تحميل النظام...';
 
-window.login = async function(){
+  const { createClient } = await import(
 
- const message=document.getElementById('message');
+    'https://esm.sh/@supabase/supabase-js@2'
 
- const email=document.getElementById('email').value.trim();
+  );
 
- const password=document.getElementById('password').value;
+  const supabase = createClient(
 
- message.textContent='جارٍ التحقق...';
+    'https://gqzsrohssrzprfqxjajp.supabase.co',
 
- const {data,error}=await supabase.auth.signInWithPassword({email,password});
+    'ضع_المفتاح_العام_هنا'
 
- if(error){message.textContent='خطأ في تسجيل الدخول: '+error.message;return;}
+  );
 
- const {data:admin,error:adminError}=await supabase
+  msg.textContent = 'النظام جاهز لتسجيل الدخول';
 
- .from('store_admins').select('user_id')
+  btn.addEventListener('click', async () => {
 
- .eq('user_id',data.user.id).maybeSingle();
+    try {
 
- if(adminError || !admin){
+      const email = document.getElementById('email').value.trim();
 
-  await supabase.auth.signOut();
+      const password = document.getElementById('password').value;
 
-  message.textContent='هذا الحساب ليس لديه صلاحية الإدارة.';
+      if (!email || !password) {
 
-  return;
+        msg.textContent = 'اكتب البريد الإلكتروني وكلمة المرور';
 
- }
-
- message.textContent='تم تسجيل الدخول بنجاح. سنجهز أدوات الإدارة في الخطوة 
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
-    const card = document.querySelector('.card');
-
-    card.innerHTML = `
-      <h2>تعيين كلمة مرور جديدة</h2>
-      <input id="newPassword" type="password"
-        placeholder="كلمة المرور الجديدة">
-      <input id="confirmPassword" type="password"
-        placeholder="تأكيد كلمة المرور">
-      <button id="savePassword">حفظ كلمة المرور</button>
-      <p id="resetMessage"></p>
-    `;
-
-    document.getElementById('savePassword').onclick = async () => {
-      const password = document.getElementById('newPassword').value;
-      const confirm = document.getElementById('confirmPassword').value;
-      const msg = document.getElementById('resetMessage');
-
-      if (password.length < 8) {
-        msg.textContent = 'كلمة المرور لازم تكون 8 أحرف على الأقل';
         return;
+
       }
 
-      if (password !== confirm) {
-        msg.textContent = 'كلمتا المرور غير متطابقتين';
-        return;
-      }
+      btn.disabled = true;
 
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      msg.textContent = 'جارٍ التحقق من الحساب...';
+
+      const {data, error} = await supabase.auth.signInWithPassword({
+
+        email,
+
+        password
+
       });
 
-      msg.textContent = error
-        ? 'حدث خطأ: ' + error.message
-        : 'تم تغيير كلمة المرور بنجاح!';
-    };
-  }
-});
+      if (error) throw error;
 
+      const {data: admin, error: adminError} = await supabase
 
+        .from('store_admins')
 
+        .select('user_id')
+
+        .eq('user_id', data.user.id)
+
+        .maybeSingle();
+
+      if (adminError) throw adminError;
+
+      if (!admin) {
+
+        await supabase.auth.signOut();
+
+        throw new Error('الحساب ليس لديه صلاحية الإدارة');
+
+      }
+
+      msg.textContent = 'تم تسجيل الدخول بنجاح.';
+
+    } catch (error) {
+
+      msg.textContent = 'خطأ: ' + error.message;
+
+    } finally {
+
+      btn.disabled = false;
+
+    }
+
+  });
+
+} catch (error) {
+
+  msg.textContent = 'فشل تحميل النظام: ' + error.message;
+
+}
 
 </script>
 
