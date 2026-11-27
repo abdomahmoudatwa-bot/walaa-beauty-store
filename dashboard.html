@@ -1,0 +1,89 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WALAA Beauty - لوحة التحكم</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f8f3f6;font-family:Arial;color:#382536}
+header{background:#8e4778;color:white;padding:22px;text-align:center}
+main{max-width:900px;margin:25px auto;padding:15px}
+h2{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.card{background:white;padding:22px;border-radius:15px;box-shadow:0 3px 12px #0001}
+.card h3{color:#8e4778}
+button{border:0;background:#8e4778;color:white;padding:12px 18px;border-radius:9px;font-size:15px}
+.logout{background:#eee;color:#382536}
+p{line-height:1.7}
+@media(max-width:500px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>WALAA Beauty</h1>
+<p>لوحة إدارة المتجر</p>
+</header>
+<main>
+<h2>أهلاً بك في لوحة التحكم 🌸</h2>
+<p>من هنا تقدر تدير متجرك ومنتجاتك وطلبات العملاء.</p>
+<div class="grid">
+<div class="card">
+<h3>🛍️ المنتجات</h3>
+<p>إضافة وتعديل المنتجات والأسعار والصور.</p>
+<button>إدارة المنتجات</button>
+</div>
+<div class="card">
+<h3>📦 الطلبات</h3>
+<p>متابعة طلبات العملاء وحالات الشحن.</p>
+<button>إدارة الطلبات</button>
+</div>
+<div class="card">
+<h3>🏷️ الأقسام</h3>
+<p>تنظيم منتجات المكياج والعناية بالبشرة.</p>
+<button>إدارة الأقسام</button>
+</div>
+<div class="card">
+<h3>🚚 الشحن</h3>
+<p>تحديد أسعار الشحن للمحافظات.</p>
+<button>إدارة الشحن</button>
+</div>
+</div>
+<br>
+<button class="logout" id="logout">تسجيل الخروج</button>
+<p id="message"></p>
+</main>
+<script type="module">
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
+
+const supabase=createClient(
+'https://pdgacxtalsihplalxzem.supabase.co',sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
+);
+
+const message=document.getElementById('message');
+
+const {data:{session},error}=await supabase.auth.getSession();
+
+if(error || !session){
+ location.href='admin.html';
+}else{
+ const {data:admin,error:adminError}=await supabase
+ .from('store_admins')
+ .select('user_id')
+ .eq('user_id',session.user.id)
+ .maybeSingle();
+
+ if(adminError || !admin){
+  await supabase.auth.signOut();
+  location.href='admin.html';
+ }
+}
+
+document.getElementById('logout').addEventListener('click',async()=>{
+ await supabase.auth.signOut();
+ location.href='admin.html';
+});
+</script>
+</body>
+</html>
