@@ -10,13 +10,10 @@
 body{font-family:Arial;background:#fff5fa;margin:0;padding:18px;color:#333}
 .container{max-width:650px;margin:auto}
 h2{text-align:center;color:#bd4b83}
-.box{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 10px #ead5e0}
+.box,.product{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 10px #ead5e0}
 input,textarea,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px;font-size:16px}
 button{background:#bd4b83;color:white;border:0;font-weight:bold}
-.product{background:white;padding:12px;border-radius:12px;margin:12px 0}
-.product img{width:100px;height:100px;object-fit:cover;border-radius:8px}
-.actions{display:flex;gap:8px}
-.actions button{flex:1}
+.product img{width:110px;height:110px;object-fit:cover;border-radius:8px}
 #status{white-space:pre-wrap;color:#a33}
 </style>
 </head>
@@ -32,7 +29,7 @@ button{background:#bd4b83;color:white;border:0;font-weight:bold}
 <input id="price" type="number" placeholder="السعر">
 <input id="sale_price" type="number" placeholder="سعر الخصم (اختياري)">
 <input id="stock" type="number" placeholder="الكمية بالمخزون">
-<label>صورة المنتج من الآيفون:</label>
+<label>صورة المنتج:</label>
 <input id="imageFile" type="file" accept="image/*">
 <img id="preview" style="display:none;width:120px;margin:10px;border-radius:10px">
 <label><input id="active" type="checkbox" checked style="width:auto"> عرض المنتج في المتجر</label>
@@ -48,7 +45,7 @@ button{background:#bd4b83;color:white;border:0;font-weight:bold}
 
 <script>
 const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
-const SUPABASE_KEY = 'ضع هناsb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+const SUPABASE_KEY = 'ضعsb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let editingId = null;
@@ -59,78 +56,60 @@ const $ = id => document.getElementById(id);
 
 $('imageFile').addEventListener('change', () => {
   selectedFile = $('imageFile').files[0] || null;
-  if (selectedFile) {
+  if(selectedFile){
     $('preview').src = URL.createObjectURL(selectedFile);
     $('preview').style.display = 'block';
   }
 });
 
-async function checkAdmin() {
-  const { data: { session }, error } = await db.auth.getSession();
-
-  if (error || !session) {
-    location.href = 'admin.html';
-    return false;
-  }
-
-  const { data, error: adminError } = await db
-    .from('store_admins')
-    .select('user_id')
-    .eq('user_id', session.user.id)
-    .maybeSingle();
-
-  if (adminError) {
-    alert('خطأ في التحقق من المدير: ' + adminError.message);
-    return false;
-  }
-
-  if (!data) {
-    alert('هذا الحساب غير مسجل كمدير');
-    return false;
-  }
-
-  return true;
-}
+async function checkAdmin(){
   const {data:{session},error} = await db.auth.getSession();
-  if(error || !session) {
+
+  if(error || !session){
     location.href = 'admin.html';
     return false;
   }
+
   const {data,error:adminError} = await db
     .from('store_admins')
     .select('user_id')
     .eq('user_id',session.user.id)
     .maybeSingle();
 
-  if(adminError || !data) {
-    await db.auth.signOut();
-    alert('هذا الحساب ليس لديه صلاحية الإدارة');
-    location.href = 'admin.html';
+  if(adminError){
+    $('status').textContent = 'خطأ التحقق من المدير: ' + adminError.message;
     return false;
   }
+
+  if(!data){
+    $('status').textContent = 'الحساب غير مسجل كمدير';
+    return false;
+  }
+
   return true;
 }
 
-async function loadProducts() {
+async function loadProducts(){
   const {data,error} = await db.from('products')
     .select('*').order('id',{ascending:false});
 
-  if(error) {
-    $('productsList').textContent = 'خطأ في تحميل المنتجات: ' + error.message;
-    return;
-  }
-
-  if(!data || !data.length) {
-    $('productsList').textContent = 'لا توجد منتجات حتى الآن';
+  if(error){
+    $('productsList').textContent = 'خطأ: ' + error.message;
     return;
   }
 
   $('productsList').innerHTML = '';
+
+  if(!data || !data.length){
+    $('productsList').textContent = 'لا توجد منتجات';
+    return;
+  }
+
   data.forEach(p => {
     const item = document.createElement('div');
     item.className = 'product';
 
-    if(p.image_url) {
+    if(p.image_url){
       const img = document.createElement('img');
       img.src = p.image_url;
       img.alt = p.name || 'صورة المنتج';
@@ -160,38 +139,39 @@ async function loadProducts() {
   });
 }
 
-async function saveProduct() {
+async function saveProduct(){
   $('status').textContent = '';
 
   const name = $('name').value.trim();
   const price = Number($('price').value);
   const stock = Number($('stock').value);
 
-  if(!name || $('price').value === '' || $('stock').value === '') {
+  if(!name || $('price').value === '' || $('stock').value === ''){
     $('status').textContent = 'اكتب اسم المنتج والسعر والكمية';
     return;
   }
 
-  if(price < 0 || stock < 0) {
+  if(price < 0 || stock < 0){
     $('status').textContent = 'السعر والكمية لا يمكن أن يكونا بالسالب';
     return;
   }
 
   const {data:{session}} = await db.auth.getSession();
-  if(!session) {
+  if(!session){
     location.href = 'admin.html';
     return;
   }
 
   let imageUrl = oldImageUrl;
 
-  if(selectedFile) {
-    if(!selectedFile.type.startsWith('image/')) {
-      $('status').textContent = 'اختار ملف صورة صالح';
+  if(selectedFile){
+    if(!selectedFile.type.startsWith('image/')){
+      $('status').textContent = 'اختار صورة صالحة';
       return;
     }
-    if(selectedFile.size > 5 * 1024 * 1024) {
-      $('status').textContent = 'حجم الصورة يجب ألا يتجاوز 5 ميجابايت';
+
+    if(selectedFile.size > 5 * 1024 * 1024){
+      $('status').textContent = 'حجم الصورة أكبر من 5 ميجابايت';
       return;
     }
 
@@ -204,7 +184,7 @@ async function saveProduct() {
       .from('product-images')
       .upload(filePath,selectedFile,{contentType:selectedFile.type});
 
-    if(uploadError) {
+    if(uploadError){
       $('status').textContent = 'فشل رفع الصورة: ' + uploadError.message;
       return;
     }
@@ -227,14 +207,15 @@ async function saveProduct() {
   };
 
   let result;
-  if(editingId) {
+
+  if(editingId){
     result = await db.from('products').update(product).eq('id',editingId);
-  } else {
+  }else{
     result = await db.from('products').insert(product);
   }
 
-  if(result.error) {
-    $('status').textContent = 'حدث خطأ: ' + result.error.message;
+  if(result.error){
+    $('status').textContent = 'خطأ الحفظ: ' + result.error.message;
     return;
   }
 
@@ -243,9 +224,10 @@ async function saveProduct() {
   await loadProducts();
 }
 
-function editProduct(p) {
+function editProduct(p){
   editingId = p.id;
   oldImageUrl = p.image_url;
+
   $('name').value = p.name || '';
   $('description').value = p.description || '';
   $('price').value = p.price ?? '';
@@ -254,10 +236,10 @@ function editProduct(p) {
   $('active').checked = p.is_active !== false;
   $('formTitle').textContent = 'تعديل المنتج';
 
-  if(p.image_url) {
+  if(p.image_url){
     $('preview').src = p.image_url;
     $('preview').style.display = 'block';
-  } else {
+  }else{
     $('preview').style.display = 'none';
   }
 
@@ -266,10 +248,11 @@ function editProduct(p) {
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function resetForm() {
+function resetForm(){
   editingId = null;
   oldImageUrl = null;
   selectedFile = null;
+
   $('name').value = '';
   $('description').value = '';
   $('price').value = '';
@@ -281,18 +264,23 @@ function resetForm() {
   $('formTitle').textContent = 'إضافة منتج جديد';
 }
 
-async function deleteProduct(id) {
-  if(!confirm('متأكد إنك عايز تحذف المنتج؟')) return;
+async function deleteProduct(id){
+  if(!confirm('متأكد من حذف المنتج؟')) return;
+
   const {error} = await db.from('products').delete().eq('id',id);
-  if(error) {
-    alert('تعذر الحذف: ' + error.message);
+
+  if(error){
+    alert('خطأ الحذف: ' + error.message);
     return;
   }
+
   await loadProducts();
 }
 
 (async function init(){
-  if(await checkAdmin()) await loadProducts();
+  if(await checkAdmin()){
+    await loadProducts();
+  }
 })();
 </script>
 </body>
