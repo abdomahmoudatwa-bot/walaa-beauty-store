@@ -23,6 +23,8 @@ header h2{color:#c04480;margin:0}
 .total-box{background:#fff7fa;padding:12px;border-radius:10px;margin:12px 0;line-height:2}
 .total{font-size:19px;font-weight:bold;color:#a83270}
 .shipping{color:#168b55;font-weight:bold}
+.discount{color:#c04480;font-weight:bold}
+.coupon{color:#168b55;font-weight:bold}
 .status-row{display:flex;gap:8px;margin-top:12px}
 select{flex:1;min-width:0;padding:11px;border:1px solid #e7d5df;border-radius:8px;background:white}
 .save{border:0;background:#168b55;color:white;padding:11px 17px;border-radius:8px}
@@ -142,10 +144,10 @@ async function loadOrders(){
     const info=document.createElement('div');
     info.className='info';
 
-    addText(info,'div','','العميل: '+order.customer_name);
-    addText(info,'div','','الهاتف: '+order.phone);
-    addText(info,'div','','المحافظة: '+order.governorate);
-    addText(info,'div','','العنوان: '+order.address);
+    addText(info,'div','','العميل: '+(order.customer_name||''));
+    addText(info,'div','','الهاتف: '+(order.phone||''));
+    addText(info,'div','','المحافظة: '+(order.governorate||''));
+    addText(info,'div','','العنوان: '+(order.address||''));
 
     const phoneLink=document.createElement('a');
     phoneLink.href='tel:'+order.phone;
@@ -171,7 +173,7 @@ async function loadOrders(){
         itemsBox,
         'div',
         '',
-        item.name+' × '+item.quantity+
+        (item.name||'منتج')+' × '+(item.quantity||1)+
         ' — '+itemTotal+' جنيه'
       );
     });
@@ -179,14 +181,45 @@ async function loadOrders(){
     card.appendChild(itemsBox);
 
     const finalTotal=Number(order.total)||0;
-    const shipping=Math.max(0,finalTotal-subtotal);
+    const discount=Math.max(0,Number(order.discount_amount)||0);
+    const shipping=Math.max(
+      0,
+      order.shipping_amount==null ? 30 : Number(order.shipping_amount)||0
+    );
+    const couponCode=order.coupon_code||'';
 
     const totalBox=document.createElement('div');
     totalBox.className='total-box';
 
     addText(totalBox,'div','','إجمالي المنتجات: '+subtotal+' جنيه');
-    addText(totalBox,'div','shipping','الشحن: '+shipping+' جنيه');
-    addText(totalBox,'div','total','الإجمالي النهائي: '+finalTotal+' جنيه');
+
+    addText(
+      totalBox,
+      'div',
+      'coupon',
+      'كود الكوبون: '+(couponCode||'لا يوجد كوبون')
+    );
+
+    addText(
+      totalBox,
+      'div',
+      'discount',
+      'قيمة الخصم: '+discount+' جنيه'
+    );
+
+    addText(
+      totalBox,
+      'div',
+      'shipping',
+      'الشحن: '+shipping+' جنيه'
+    );
+
+    addText(
+      totalBox,
+      'div',
+      'total',
+      'الإجمالي النهائي: '+finalTotal+' جنيه'
+    );
 
     card.appendChild(totalBox);
 
