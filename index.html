@@ -1,67 +1,387 @@
 
-
 <!DOCTYPE html>
-
 <html lang="ar" dir="rtl">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>WALAA Beauty</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WALAA Beauty | جمالك يبدأ من هنا</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-
-body{margin:0;font-family:Arial;background:#fff8fb;color:#49313e;text-align:center}
-
-header{background:#e9b7cd;padding:35px 15px}
-
-h1{font-size:38px;margin:0}
-
-p{font-size:18px}
-
-main{padding:35px 15px}
-
-button{background:#b95d86;color:white;border:0;padding:15px 30px;border-radius:25px;font-size:18px}
-
-footer{background:#f3dce7;padding:20px;margin-top:40px}
-
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#fff7fa;color:#382b32}
+header{background:#fff;padding:15px;text-align:center;position:sticky;top:0;z-index:5;box-shadow:0 2px 10px #0001}
+.logo{font-size:27px;font-weight:bold;color:#c04480;letter-spacing:2px}
+header p{margin:5px;color:#987184;font-size:13px}
+.hero{margin:15px;padding:30px 18px;border-radius:18px;background:linear-gradient(135deg,#f9c6df,#fff0f6);text-align:center}
+.hero h1{color:#a83270;margin:0 0 10px;font-size:25px}
+.hero p{line-height:1.8;margin:0}
+.container{padding:15px;max-width:1100px;margin:auto}
+.search{width:100%;padding:14px;border:1px solid #edd1df;border-radius:12px;font-size:16px;background:white}
+h2{font-size:20px;color:#a83270}
+.categories{display:flex;gap:8px;overflow-x:auto;padding:8px 0 15px}
+.category{white-space:nowrap;border:1px solid #e9b6d0;background:white;color:#a83270;border-radius:22px;padding:10px 15px}
+.category.active{background:#c04480;color:white}
+.products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.product{background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 9px #0000000d}
+.product img{width:100%;height:155px;object-fit:cover;background:#fcebf3}
+.product-info{padding:11px}
+.product h3{font-size:15px;margin:0 0 7px}
+.description{font-size:12px;color:#887780;min-height:30px;line-height:1.5}
+.price{color:#c04480;font-weight:bold;margin:8px 0}
+.old-price{text-decoration:line-through;color:#999;font-size:12px;margin-right:5px}
+.add{width:100%;background:#c04480;color:white;padding:11px;border-radius:9px}
+.cart-box,.checkout{background:white;padding:15px;border-radius:14px;margin-top:20px;box-shadow:0 2px 9px #0000000d}
+.cart-item{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #eee;padding:12px 0}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{border:0;background:#f8e1ed;color:#a83270;border-radius:7px;padding:6px 11px}
+input,textarea,select{width:100%;padding:12px;margin:7px 0 12px;border:1px solid #e7d5df;border-radius:9px;font-size:15px}
+.order{width:100%;padding:14px;background:#168b55;color:white;border:0;border-radius:10px;font-size:16px;font-weight:bold}
+.total{font-size:19px;color:#a83270;font-weight:bold;margin:15px 0}
+.empty{text-align:center;color:#888;padding:20px}
+footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
+@media(min-width:650px){.products{grid-template-columns:repeat(4,minmax(0,1fr))}.product img{height:200px}}
 </style>
-
 </head>
-
 <body>
 
 <header>
-
-<h1>WALAA Beauty</h1>
-
-<p>Your beauty, our passion 🤍</p>
-
+<div class="logo">WALAA BEAUTY</div>
+<p>جمالك يبدأ من هنا ❤️</p>
 </header>
 
-<main>
+<section class="hero">
+<h1>أهلاً بيكي في WALAA Beauty</h1>
+<p>اكتشفي أجمل منتجات التجميل والعناية بالبشرة والشعر<br>توصيل لجميع محافظات مصر</p>
+</section>
 
-<h2>أهلاً بيكي في WALAA Beauty</h2>
+<main class="container">
+<input class="search" id="search" placeholder="ابحثي عن منتج..." oninput="renderProducts()">
 
-<p>اكتشفي عالم الجمال والعناية بنفسك</p>
+<h2>تسوقي حسب القسم</h2>
+<div class="categories" id="categories">
+<button class="category active" onclick="chooseCategory('',this)">الكل</button>
+</div>
 
-<p>منتجات كوزماتكس وعناية بالبشرة بأسعار مميزة</p>
+<h2>منتجاتنا</h2>
+<div class="products" id="products">
+<div class="empty">جاري تحميل المنتجات...</div>
+</div>
 
-<button onclick="window.open('https://wa.me/201153123418')">اطلبي عبر واتساب</button>
+<section class="cart-box" id="cartSection">
+<h2>🛍️ سلة مشترياتك</h2>
+<div id="cartItems" class="empty">السلة فارغة</div>
+<div class="total" id="total">الإجمالي: 0 جنيه</div>
+</section>
 
+<section class="checkout">
+<h2>بيانات توصيل الطلب</h2>
+<input id="customerName" placeholder="الاسم بالكامل">
+<input id="customerPhone" type="tel" placeholder="رقم الموبايل">
+<select id="governorate">
+<option value="">اختاري المحافظة</option>
+<option>القاهرة</option>
+<option>الجيزة</option>
+<option>الإسكندرية</option>
+<option>القليوبية</option>
+<option>البحيرة</option>
+<option>المنوفية</option>
+<option>الغربية</option>
+<option>كفر الشيخ</option>
+<option>الدقهلية</option>
+<option>دمياط</option>
+<option>الشرقية</option>
+<option>بورسعيد</option>
+<option>الإسماعيلية</option>
+<option>السويس</option>
+<option>شمال سيناء</option>
+<option>جنوب سيناء</option>
+<option>بني سويف</option>
+<option>الفيوم</option>
+<option>المنيا</option>
+<option>أسيوط</option>
+<option>سوهاج</option>
+<option>قنا</option>
+<option>الأقصر</option>
+<option>أسوان</option>
+<option>الوادي الجديد</option>
+<option>مطروح</option>
+</select>
+<textarea id="address" placeholder="العنوان بالتفصيل"></textarea>
+<button class="order" onclick="sendOrder()">إتمام الطلب عبر واتساب</button>
+</section>
 </main>
 
 <footer>
-
-<p>WALAA Beauty © 2026</p>
-
-<p>توصيل لجميع محافظات مصر</p>
-
+WALAA Beauty ❤️<br>
+توصيل لجميع محافظات مصر
 </footer>
 
-</body>
+<script>
+const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
 
+
+const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+
+const db = supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const WHATSAPP = '201153123418';
+
+let products = [];
+let categories = [];
+let cart = [];
+let selectedCategory = '';
+
+async function loadStore(){
+  const productResult = await db.from('products')
+    .select('id,name,description,price,sale_price,image_url,category_id,stock,is_active')
+    .eq('is_active',true)
+    .order('id',{ascending:false});
+
+  if(productResult.error){
+    document.getElementById('products').textContent =
+      'تعذر تحميل المنتجات. حاولي تحديث الصفحة.';
+    return;
+  }
+
+  products = productResult.data || [];
+
+  const categoryResult = await db.from('categories')
+    .select('id,name')
+    .order('name');
+
+  if(!categoryResult.error){
+    categories = categoryResult.data || [];
+    renderCategories();
+  }
+
+  renderProducts();
+}
+
+function renderCategories(){
+  const box = document.getElementById('categories');
+  box.innerHTML = '';
+
+  const all = document.createElement('button');
+  all.className = 'category active';
+  all.textContent = 'الكل';
+  all.onclick = ()=>chooseCategory('',all);
+  box.appendChild(all);
+
+  categories.forEach(cat=>{
+    const btn = document.createElement('button');
+    btn.className = 'category';
+    btn.textContent = cat.name;
+    btn.onclick = ()=>chooseCategory(cat.id,btn);
+    box.appendChild(btn);
+  });
+}
+
+function chooseCategory(id,button){
+  selectedCategory = id;
+  document.querySelectorAll('.category').forEach(b=>b.classList.remove('active'));
+  button.classList.add('active');
+  renderProducts();
+}
+
+function renderProducts(){
+  const box = document.getElementById('products');
+  const search = document.getElementById('search').value.trim().toLowerCase();
+
+  const filtered = products.filter(p=>{
+    const matchesCategory = !selectedCategory ||
+      String(p.category_id) === String(selectedCategory);
+    const matchesSearch = (p.name || '').toLowerCase().includes(search);
+    return matchesCategory && matchesSearch;
+  });
+
+  box.innerHTML = '';
+
+  if(!filtered.length){
+    box.innerHTML = '<div class="empty">لا توجد منتجات في هذا القسم حاليًا</div>';
+    return;
+  }
+
+  filtered.forEach(p=>{
+    const card = document.createElement('article');
+    card.className = 'product';
+
+    const img = document.createElement('img');
+    img.src = p.image_url || '';
+    img.alt = p.name;
+    img.loading = 'lazy';
+
+    const info = document.createElement('div');
+    info.className = 'product-info';
+
+    const name = document.createElement('h3');
+    name.textContent = p.name;
+
+    const desc = document.createElement('div');
+    desc.className = 'description';
+    desc.textContent = p.description || '';
+
+    const price = document.createElement('div');
+    price.className = 'price';
+
+    if(p.sale_price !== null && Number(p.sale_price) < Number(p.price)){
+      price.textContent = p.sale_price + ' جنيه ';
+      const old = document.createElement('span');
+      old.className = 'old-price';
+      old.textContent = p.price + ' جنيه';
+      price.appendChild(old);
+    }else{
+      price.textContent = p.price + ' جنيه';
+    }
+
+    const add = document.createElement('button');
+    add.className = 'add';
+    add.textContent = Number(p.stock) <= 0 ? 'غير متوفر' : 'أضيفي للسلة';
+    add.disabled = Number(p.stock) <= 0;
+    if(add.disabled) add.style.opacity = '.5';
+    add.onclick = ()=>addToCart(p.id);
+
+    info.append(name,desc,price,add);
+    card.append(img,info);
+    box.appendChild(card);
+  });
+}
+
+function addToCart(id){
+  const product = products.find(p=>String(p.id)===String(id));
+  if(!product) return;
+
+  const existing = cart.find(item=>String(item.id)===String(id));
+
+  if(existing){
+    if(existing.qty >= Number(product.stock)){
+      alert('الكمية المتاحة من المنتج لا تكفي');
+      return;
+    }
+    existing.qty++;
+  }else{
+    cart.push({id:product.id,qty:1});
+  }
+
+  renderCart();
+}
+
+function changeQty(id,amount){
+  const item = cart.find(x=>String(x.id)===String(id));
+  const product = products.find(p=>String(p.id)===String(id));
+  if(!item || !product) return;
+
+  const next = item.qty + amount;
+  if(next > Number(product.stock)){
+    alert('وصلتي للكمية المتاحة');
+    return;
+  }
+
+  item.qty = next;
+  if(item.qty <= 0){
+    cart = cart.filter(x=>String(x.id)!==String(id));
+  }
+  renderCart();
+}
+
+function getPrice(product){
+  return product.sale_price !== null &&
+    Number(product.sale_price) < Number(product.price)
+    ? Number(product.sale_price)
+    : Number(product.price);
+}
+
+function renderCart(){
+  const box = document.getElementById('cartItems');
+  box.innerHTML = '';
+  let total = 0;
+
+  if(!cart.length){
+    box.textContent = 'السلة فارغة';
+  }
+
+  cart.forEach(item=>{
+    const p = products.find(x=>String(x.id)===String(item.id));
+    if(!p) return;
+
+    total += getPrice(p) * item.qty;
+
+    const row = document.createElement('div');
+    row.className = 'cart-item';
+
+    const name = document.createElement('span');
+    name.textContent = p.name;
+
+    const controls = document.createElement('div');
+    controls.className = 'qty';
+
+    const minus = document.createElement('button');
+    minus.textContent = '−';
+    minus.onclick = ()=>changeQty(item.id,-1);
+
+    const count = document.createElement('span');
+    count.textContent = item.qty;
+
+    const plus = document.createElement('button');
+    plus.textContent = '+';
+    plus.onclick = ()=>changeQty(item.id,1);
+
+    controls.append(minus,count,plus);
+    row.append(name,controls);
+    box.appendChild(row);
+  });
+
+  document.getElementById('total').textContent =
+    'الإجمالي: ' + total + ' جنيه';
+}
+
+function sendOrder(){
+  if(!cart.length){
+    alert('السلة فارغة، أضيفي منتجات أولاً');
+    return;
+  }
+
+  const name = document.getElementById('customerName').value.trim();
+  const phone = document.getElementById('customerPhone').value.trim();
+  const governorate = document.getElementById('governorate').value;
+  const address = document.getElementById('address').value.trim();
+
+  if(!name || !phone || !governorate || !address){
+    alert('من فضلك استكملي بيانات التوصيل');
+    return;
+  }
+
+  if(!/^[0-9+\s-]{8,20}$/.test(phone)){
+    alert('من فضلك اكتبي رقم هاتف صحيح');
+    return;
+  }
+
+  let total = 0;
+  let message = 'طلب جديد من WALAA Beauty ❤️\n\n';
+  message += 'الاسم: ' + name + '\n';
+  message += 'الهاتف: ' + phone + '\n';
+  message += 'المحافظة: ' + governorate + '\n';
+  message += 'العنوان: ' + address + '\n\n';
+  message += 'المنتجات:\n';
+
+  cart.forEach(item=>{
+    const p = products.find(x=>String(x.id)===String(item.id));
+    if(!p) return;
+    const subtotal = getPrice(p) * item.qty;
+    total += subtotal;
+    message += '- ' + p.name + ' × ' + item.qty +
+      ' = ' + subtotal + ' جنيه\n';
+  });
+
+  message += '\nإجمالي المنتجات: ' + total + ' جنيه';
+  message += '\nالشحن يتم تأكيده حسب المحافظة.';
+  message += '\n\nبرجاء تأكيد الطلب ❤️';
+
+  window.open(
+    'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(message),
+    '_blank'
+  );
+}
+
+loadStore();
+</script>
+</body>
 </html>
