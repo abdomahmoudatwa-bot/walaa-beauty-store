@@ -65,7 +65,7 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <button class="category active" onclick="chooseCategory('',this)">الكل</button>
 </div>
 
-<h2>منتجاتنا</h2>
+<h2 id="productsTitle">منتجاتنا</h2>
 <div class="products" id="products">
 <div class="empty">جاري تحميل المنتجات...</div>
 </div>
@@ -73,7 +73,7 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <section class="cart-box">
 <h2>🛍️ سلة مشترياتك</h2>
 <div id="cartItems" class="empty">السلة فارغة</div>
-<div class="total" id="total">إجمالي المنتجات: 0 جنيه<br>الشحن: 30 جنيه<br>الإجمالي النهائي: 30 جنيه</div>
+<div class="total" id="total">إجمالي المنتجات: 0 جنيه<br>الشحن: 0 جنيه<br>الإجمالي النهائي: 0 جنيه</div>
 <p class="shipping-note">🚚 شحن موحّد لجميع محافظات مصر: 30 جنيه</p>
 </section>
 
@@ -181,7 +181,15 @@ function renderCategories(){
   all.onclick = ()=>chooseCategory('',all);
   box.appendChild(all);
 
+  const offers = document.createElement('button');
+  offers.className = 'category';
+  offers.textContent = '🔥 عروض مميزة';
+  offers.onclick = ()=>chooseCategory('offers',offers);
+  box.appendChild(offers);
+
   categories.forEach(cat=>{
+    if(cat.name === 'عروض مميزة') return;
+
     const btn = document.createElement('button');
     btn.className = 'category';
     btn.textContent = cat.name;
@@ -198,6 +206,11 @@ function chooseCategory(id,button){
   });
 
   button.classList.add('active');
+
+  document.getElementById('productsTitle').textContent =
+    id === 'offers' ? '🔥 عروض مميزة' :
+    id === '' ? 'منتجاتنا' : 'منتجات القسم';
+
   renderProducts();
 }
 
@@ -213,16 +226,26 @@ function renderProducts(){
   const search = document.getElementById('search').value.trim().toLowerCase();
 
   const filtered = products.filter(p=>{
-    const matchesCategory = !selectedCategory ||
-      String(p.category_id) === String(selectedCategory);
+    const hasOffer = p.sale_price !== null &&
+      Number(p.sale_price) < Number(p.price);
+
+    const matchesCategory =
+      selectedCategory === 'offers'
+        ? hasOffer
+        : (!selectedCategory ||
+           String(p.category_id) === String(selectedCategory));
+
     const matchesSearch = (p.name || '').toLowerCase().includes(search);
+
     return matchesCategory && matchesSearch;
   });
 
   box.innerHTML = '';
 
   if(!filtered.length){
-    box.innerHTML = '<div class="empty">لا توجد منتجات في هذا القسم حاليًا</div>';
+    box.innerHTML = selectedCategory === 'offers'
+      ? '<div class="empty">لا توجد عروض مميزة حاليًا ❤️</div>'
+      : '<div class="empty">لا توجد منتجات في هذا القسم حاليًا</div>';
     return;
   }
 
