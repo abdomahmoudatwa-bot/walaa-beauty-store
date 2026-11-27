@@ -1,0 +1,247 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WALAA Beauty | المنتجات</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f8f3f6;font-family:Arial;color:#382536}
+header{background:#8e4778;color:white;padding:20px;text-align:center}
+main{max-width:750px;margin:20px auto;padding:15px}
+.card{background:white;padding:20px;border-radius:15px;margin-bottom:18px;box-shadow:0 3px 12px #0001}
+input,textarea,select,button{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:9px;font-size:15px}
+button{background:#8e4778;color:white;border:0;font-weight:bold}
+.delete{background:#b83232}
+.secondary{background:#eee;color:#382536}
+.product{border-bottom:1px solid #eee;padding:15px 0}
+.product img{width:75px;height:75px;object-fit:cover;border-radius:10px}
+.actions{display:flex;gap:8px}
+.actions button{flex:1}
+#message{white-space:pre-wrap;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+<h1>WALAA Beauty</h1>
+<p>إدارة المنتجات</p>
+</header>
+
+<main>
+<div class="card">
+<h2 id="formTitle">إضافة منتج جديد 🌸</h2>
+<form id="productForm">
+<input id="name" placeholder="اسم المنتج" required>
+<textarea id="description" placeholder="وصف المنتج"></textarea>
+<input id="price" type="number" min="0" step="0.01" placeholder="السعر" required>
+<input id="salePrice" type="number" min="0" step="0.01" placeholder="سعر الخصم اختياري">
+<input id="imageUrl" type="url" placeholder="رابط صورة المنتج">
+<select id="category"><option value="">اختار القسم</option></select>
+<input id="stock" type="number" min="0" step="1" placeholder="الكمية" value="0">
+<label><input id="active" type="checkbox" checked style="width:auto"> المنتج ظاهر في المتجر</label>
+<button type="submit" id="saveBtn">حفظ المنتج</button>
+<button type="button" class="secondary" id="cancelBtn" hidden>إلغاء التعديل</button>
+</form>
+<p id="message">جاري تحميل المنتجات...</p>
+</div>
+
+<div class="card">
+<h2>المنتجات الموجودة</h2>
+<div id="productsList"></div>
+</div>
+<button class="secondary" onclick="location.href='dashboard.html'">العودة للوحة التحكم</button>
+</main>
+
+<script type="module">
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
+
+const supabase=createClient(
+'https://pdgacxtalsihplalxzem.supabase.co',
+'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
+);
+
+const $=id=>document.getElementById(id);
+const message=$('message');
+let editingId=null;
+
+async function start(){
+ const {data:{session},error}=await supabase.auth.getSession();
+ if(error||!session){location.href='admin.html';return;}
+
+ const {data:admin,error:adminError}=await supabase
+ .from('store_admins').select('user_id')
+ .eq('user_id',session.user.id).maybeSingle();
+
+ if(adminError||!admin){
+  await supabase.auth.signOut();
+  location.href='admin.html';
+  return;
+ }
+
+ await loadCategories();
+ await loadProducts();
+}
+
+async function loadCategories(){
+ const {data,error}=await supabase.from('categories')
+ .select('id,name').order('name');
+
+ if(error){message.textContent='خطأ الأقسام: '+error.message;return;}
+
+ $('category').replaceChildren(new Option('بدون قسم',''));
+ (data||[]).forEach(c=>$('category').add(new Option(c.name,c.id)));
+}
+
+async function loadProducts(){
+ message.textContent='جاري تحميل المنتجات...';
+
+ const {data,error}=await supabase.from('products')
+ .select('id,name,description,price,sale_price,image_url,category_id,stock,is_active')
+ .order('id',{ascending:false});
+
+ if(error){message.textContent='خطأ المنتجات: '+error.message;return;}
+
+ const list=$('productsList');
+ list.replaceChildren();
+
+ if(!data?.length) list.textContent='لا توجد منتجات حتى الآن.';
+
+ (data||[]).forEach(p=>{
+  const item=document.createElement('div');
+  item.className='product';
+
+  const row=document.createElement('div');
+  row.style.display='flex';
+  row.style.gap='12px';
+  row.style.alignItems='center';
+
+  if(p.image_url){
+   const img=document.createElement('img');
+   img.src=p.image_url;
+   img.alt=p.name;
+   img.onerror=()=>img.style.display='none';
+   row.append(img);
+  }
+
+  const details=document.createElement('div');
+  const title=document.createElement('strong');
+  title.textContent=p.name;
+
+  const price=document.createElement('p');
+  price.textContent='السعر: '+p.price+' جنيه';
+
+  const stock=document.createElement('p');
+  stock.textContent='المخزون: '+p.stock+' | '+(p.is_active?'ظاهر':'مخفي');
+
+  details.append(title,price,stock);
+  row.append(details);
+  item.append(row);
+
+  const actions=document.createElement('div');
+  actions.className='actions';
+
+  const edit=document.createElement('button');
+  edit.textContent='تعديل';
+  edit.onclick=()=>editProduct(p);
+
+  const del=document.createElement('button');
+  del.textContent='حذف';
+  del.className='delete';
+  del.onclick=()=>deleteProduct(p.id);
+
+  actions.append(edit,del);
+  item.append(actions);
+  list.append(item);
+ });
+
+ message.textContent='تم تحميل المنتجات بنجاح.';
+}
+
+$('productForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+
+ const name=$('name').value.trim();
+ const price=Number($('price').value);
+ const stock=Number($('stock').value);
+ const saleValue=$('salePrice').value;
+ const salePrice=saleValue===''?null:Number(saleValue);
+
+ if(!name||!Number.isFinite(price)||price<0||
+    !Number.isInteger(stock)||stock<0||
+    (salePrice!==null&&(!Number.isFinite(salePrice)||salePrice<0))){
+  message.textContent='راجع بيانات المنتج والأسعار والكمية.';
+  return;
+ }
+
+ const product={
+  name,
+  description:$('description').value.trim(),
+  price,
+  sale_price:salePrice,
+  image_url:$('imageUrl').value.trim()||null,
+  category_id:$('category').value?Number($('category').value):null,
+  stock,
+  is_active:$('active').checked
+ };
+
+ $('saveBtn').disabled=true;
+ message.textContent='جاري الحفظ...';
+
+ try{
+  const result=editingId
+   ?await supabase.from('products').update(product).eq('id',editingId)
+   :await supabase.from('products').insert(product);
+
+  if(result.error) throw result.error;
+
+  message.textContent='تم حفظ المنتج بنجاح.';
+  resetForm();
+  await loadProducts();
+ }catch(error){
+  message.textContent='خطأ: '+error.message;
+ }finally{
+  $('saveBtn').disabled=false;
+ }
+});
+
+function editProduct(p){
+ editingId=p.id;
+ $('name').value=p.name||'';
+ $('description').value=p.description||'';
+ $('price').value=p.price??'';
+ $('salePrice').value=p.sale_price??'';
+ $('imageUrl').value=p.image_url||'';
+ $('category').value=p.category_id??'';
+ $('stock').value=p.stock??0;
+ $('active').checked=p.is_active;
+ $('formTitle').textContent='تعديل المنتج';
+ $('saveBtn').textContent='حفظ التعديلات';
+ $('cancelBtn').hidden=false;
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function deleteProduct(id){
+ if(!confirm('هل أنت متأكد من حذف المنتج؟'))return;
+ const {error}=await supabase.from('products').delete().eq('id',id);
+ if(error){message.textContent='خطأ الحذف: '+error.message;return;}
+ message.textContent='تم الحذف.';
+ await loadProducts();
+}
+
+function resetForm(){
+ editingId=null;
+ $('productForm').reset();
+ $('active').checked=true;
+ $('stock').value=0;
+ $('formTitle').textContent='إضافة منتج جديد 🌸';
+ $('saveBtn').textContent='حفظ المنتج';
+ $('cancelBtn').hidden=true;
+}
+
+$('cancelBtn').addEventListener('click',resetForm);
+
+start().catch(error=>message.textContent='خطأ: '+error.message);
+</script>
+</body>
+</html>
