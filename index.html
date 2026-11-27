@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -167,6 +166,10 @@ let appliedCoupon = null;
 
 async function loadStore(){
   const productBox = document.getElementById('products');
+  const categoryBox = document.getElementById('categories');
+
+  productBox.innerHTML =
+    '<div class="empty">جاري تحميل المنتجات...</div>';
 
   try{
     const productResult = await db
@@ -175,24 +178,41 @@ async function loadStore(){
       .eq('is_active',true);
 
     if(productResult.error) throw productResult.error;
+
     products = productResult.data || [];
 
-    const categoryResult = await db
-      .from('categories')
-      .select('id,name')
-      .order('name');
-
-    if(categoryResult.error) throw categoryResult.error;
-    categories = categoryResult.data || [];
-
-    renderCategories();
+    // عرض المنتجات فور تحميلها
     renderProducts();
+
+    // تحميل الأقسام بشكل مستقل
+    try{
+      const categoryResult = await db
+        .from('categories')
+        .select('id,name')
+        .order('name');
+
+      if(categoryResult.error) throw categoryResult.error;
+
+      categories = categoryResult.data || [];
+      renderCategories();
+
+    }catch(categoryError){
+      console.error('Category error:',categoryError);
+      categoryBox.innerHTML =
+        '<div class="empty">تعذر تحميل الأقسام: ' +
+        (categoryError.message || 'خطأ غير معروف') +
+        '</div>';
+    }
+
     renderCart();
 
   }catch(error){
-    console.error(error);
+    console.error('Store loading error:',error);
+
     productBox.innerHTML =
-      '<div class="empty">تعذر تحميل المنتجات. حاولي تحديث الصفحة.</div>';
+      '<div class="empty">خطأ تحميل المنتجات: ' +
+      (error.message || 'خطأ غير معروف') +
+      '</div>';
   }
 }
 
