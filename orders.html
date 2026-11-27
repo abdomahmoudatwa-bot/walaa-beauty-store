@@ -1,0 +1,235 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طلبات العملاء | WALAA Beauty</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff7fa;color:#382b32;font-family:Arial,sans-serif}
+header{background:white;padding:17px;text-align:center;box-shadow:0 2px 10px #0001}
+header h2{color:#c04480;margin:0}
+.container{max-width:900px;margin:auto;padding:15px}
+.top{display:flex;gap:10px;margin:15px 0}
+.top a,.top button{flex:1;text-align:center;padding:12px;border:0;border-radius:9px;background:#c04480;color:white;text-decoration:none;font-size:14px}
+#orders{display:grid;gap:15px}
+.order-card{background:white;border-radius:14px;padding:15px;box-shadow:0 2px 9px #0000000d}
+.order-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid #eee;padding-bottom:12px}
+.order-number{color:#c04480;font-weight:bold}
+.info{line-height:1.9;font-size:14px;margin:12px 0}
+.items{background:#fff7fa;padding:10px;border-radius:9px;line-height:1.9;font-size:14px}
+.total{font-size:18px;font-weight:bold;color:#a83270;margin:12px 0}
+.status-row{display:flex;gap:8px;margin-top:12px}
+select{flex:1;min-width:0;padding:11px;border:1px solid #e7d5df;border-radius:8px;background:white}
+.save{border:0;background:#168b55;color:white;padding:11px 17px;border-radius:8px}
+.save:disabled{opacity:.5}
+.empty{text-align:center;background:white;padding:25px;border-radius:12px;color:#888}
+.small{font-size:12px;color:#888}
+</style>
+</head>
+<body>
+
+<header>
+<h2>WALAA Beauty ❤️</h2>
+<p>إدارة طلبات العملاء</p>
+</header>
+
+<main class="container">
+
+<div class="top">
+<a href="dashboard.html">لوحة التحكم</a>
+<button onclick="loadOrders()">تحديث الطلبات ↻</button>
+<button onclick="logout()">خروج</button>
+</div>
+
+<div id="orders">
+<div class="empty">جاري تحميل الطلبات...</div>
+</div>
+
+</main>
+
+<script>
+const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+
+const db = supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+const statuses = [
+  {value:'new',label:'طلب جديد'},
+  {value:'processing',label:'جاري التجهيز'},
+  {value:'shipped',label:'تم الشحن'},
+  {value:'delivered',label:'تم التسليم'},
+  {value:'cancelled',label:'ملغي'}
+];
+
+async function checkAdmin(){
+  const {data,error} = await db.auth.getSession();
+
+  if(error || !data.session){
+    location.href='admin.html';
+    return false;
+  }
+
+  const {data:admin,error:adminError} = await db
+    .from('store_admins')
+    .select('user_id')
+    .eq('user_id',data.session.user.id)
+    .maybeSingle();
+
+  if(adminError || !admin){
+    await db.auth.signOut();
+    location.href='admin.html';
+    return false;
+  }
+
+  return true;
+}
+
+async function logout(){
+  await db.auth.signOut();
+  location.href='admin.html';
+}
+
+function addText(parent,tag,className,value){
+  const el=document.createElement(tag);
+  if(className) el.className=className;
+  el.textContent=value ?? '';
+  parent.appendChild(el);
+  return el;
+}
+
+function formatDate(value){
+  return new Date(value).toLocaleString('ar-EG');
+}
+
+async function loadOrders(){
+  const box=document.getElementById('orders');
+  box.innerHTML='<div class="empty">جاري تحميل الطلبات...</div>';
+
+  const {data,error}=await db
+    .from('store_orders')
+    .select('*')
+    .order('created_at',{ascending:false});
+
+  if(error){
+    console.error(error);
+    box.innerHTML='<div class="empty">تعذر تحميل الطلبات: '+error.message+'</div>';
+    return;
+  }
+
+  box.innerHTML='';
+
+  if(!data || !data.length){
+    box.innerHTML='<div class="empty">لا توجد طلبات حتى الآن</div>';
+    return;
+  }
+
+  data.forEach(order=>{
+    const card=document.createElement('section');
+    card.className='order-card';
+
+    const head=document.createElement('div');
+    head.className='order-head';
+
+    addText(head,'span','order-number',order.order_number);
+    addText(head,'span','small',formatDate(order.created_at));
+    card.appendChild(head);
+
+    const info=document.createElement('div');
+    info.className='info';
+
+    addText(info,'div','', 'العميل: '+order.customer_name);
+    addText(info,'div','', 'الهاتف: '+order.phone);
+    addText(info,'div','', 'المحافظة: '+order.governorate);
+    addText(info,'div','', 'العنوان: '+order.address);
+
+    const phoneLink=document.createElement('a');
+    phoneLink.href='tel:'+order.phone;
+    phoneLink.textContent='اتصال بالعميل';
+    phoneLink.style.color='#c04480';
+    info.appendChild(phoneLink);
+
+    card.appendChild(info);
+
+    const itemsBox=document.createElement('div');
+    itemsBox.className='items';
+
+    addText(itemsBox,'strong','','المنتجات:');
+
+    (Array.isArray(order.items)?order.items:[]).forEach(item=>{
+      addText(
+        itemsBox,
+        'div',
+        '',
+        item.name+' × '+item.quantity+
+        ' — '+item.subtotal+' جنيه'
+      );
+    });
+
+    card.appendChild(itemsBox);
+
+    addText(card,'div','total','الإجمالي: '+order.total+' جنيه');
+
+    const row=document.createElement('div');
+    row.className='status-row';
+
+    const select=document.createElement('select');
+
+    statuses.forEach(status=>{
+      const option=document.createElement('option');
+      option.value=status.value;
+      option.textContent=status.label;
+      select.appendChild(option);
+    });
+
+    select.value=statuses.some(s=>s.value===order.status)
+      ? order.status
+      : 'new';
+
+    const save=document.createElement('button');
+    save.className='save';
+    save.textContent='حفظ الحالة';
+
+    save.onclick=()=>updateStatus(order.id,select.value,save);
+
+    row.append(select,save);
+    card.appendChild(row);
+
+    box.appendChild(card);
+  });
+}
+
+async function updateStatus(id,status,button){
+  button.disabled=true;
+  button.textContent='جاري الحفظ...';
+
+  const {error}=await db
+    .from('store_orders')
+    .update({status:status})
+    .eq('id',id);
+
+  if(error){
+    console.error(error);
+    alert('تعذر تحديث الحالة: '+error.message);
+    button.disabled=false;
+    button.textContent='حفظ الحالة';
+    return;
+  }
+
+  alert('تم تحديث حالة الطلب بنجاح ❤️');
+  button.disabled=false;
+  button.textContent='تم الحفظ ✓';
+}
+
+async function start(){
+  const allowed=await checkAdmin();
+  if(allowed) await loadOrders();
+}
+
+start();
+</script>
+
+</body>
+</html>
