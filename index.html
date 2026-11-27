@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -37,9 +38,17 @@ h2{font-size:20px;color:#a83270}
 input,textarea,select{width:100%;padding:12px;margin:7px 0 12px;border:1px solid #e7d5df;border-radius:9px;font-size:15px}
 .order{width:100%;padding:14px;background:#168b55;color:white;border:0;border-radius:10px;font-size:16px;font-weight:bold}
 .order:disabled{opacity:.6}
-.total{font-size:19px;color:#a83270;font-weight:bold;margin:15px 0;line-height:1.8}
+.total{font-size:17px;color:#a83270;font-weight:bold;margin:15px 0;line-height:2}
 .shipping-note{color:#168b55;font-size:14px;font-weight:bold}
 .empty{text-align:center;color:#888;padding:20px}
+.coupon-area{background:#fff5fa;border:1px dashed #d98bb2;border-radius:12px;padding:13px;margin-top:15px}
+.coupon-area h3{color:#a83270;margin:0 0 8px;font-size:16px}
+.coupon-row{display:flex;gap:8px;align-items:center}
+.coupon-row input{margin:0;min-width:0}
+.coupon-row button{background:#c04480;color:white;border:0;border-radius:9px;padding:12px 17px;white-space:nowrap}
+#couponMessage{font-size:13px;margin:9px 0 0;line-height:1.6}
+.coupon-success{color:#168b55}
+.coupon-error{color:#c03958}
 footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 @media(min-width:650px){.products{grid-template-columns:repeat(4,minmax(0,1fr))}.product img{height:200px}}
 </style>
@@ -73,7 +82,22 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <section class="cart-box">
 <h2>🛍️ سلة مشترياتك</h2>
 <div id="cartItems" class="empty">السلة فارغة</div>
-<div class="total" id="total">إجمالي المنتجات: 0 جنيه<br>الشحن: 0 جنيه<br>الإجمالي النهائي: 0 جنيه</div>
+
+<div class="coupon-area">
+<h3>🎟️ عندك كوبون خصم؟</h3>
+<div class="coupon-row">
+<input id="couponCode" type="text" placeholder="اكتبي كود الخصم">
+<button type="button" id="couponButton" onclick="applyCoupon()">تطبيق</button>
+</div>
+<p id="couponMessage"></p>
+</div>
+
+<div class="total" id="total">
+إجمالي المنتجات: 0 جنيه<br>
+الخصم: 0 جنيه<br>
+الشحن: 0 جنيه<br>
+الإجمالي النهائي: 0 جنيه
+</div>
 <p class="shipping-note">🚚 شحن موحّد لجميع محافظات مصر: 30 جنيه</p>
 </section>
 
@@ -139,6 +163,7 @@ let categories = [];
 let cart = [];
 let selectedCategory = '';
 let sendingOrder = false;
+let appliedCoupon = null;
 
 async function loadStore(){
   const productBox = document.getElementById('products');
@@ -334,21 +359,141 @@ function changeQty(id,amount){
   renderCart();
 }
 
+function getSubtotal(){
+  let subtotal = 0;
+
+  cart.forEach(item=>{
+    const p = products.find(x=>String(x.id)===String(item.id));
+    if(p) subtotal += getPrice(p) * item.qty;
+  });
+
+  return subtotal;
+}
+
+function calculateDiscount(coupon,subtotal){
+  if(!coupon) return 0;
+
+  let discount = 0;
+
+  if(coupon.discount_type === 'percentage'){
+    discount = subtotal * Number(coupon.discount_value) / 100;
+  }else if(coupon.discount_type === 'fixed'){
+    discount = Number(coupon.discount_value);
+  }
+
+  return Math.min(Math.max(discount,0),subtotal);
+}
+
+async function fetchValidCoupon(code,subtotal){
+  const {data,error} = await db
+    .from('coupons')
+    .select('code,discount_type,discount_value,min_order,expires_at,is_active')
+    .eq('code',code)
+    .maybeSingle();
+
+  if(error) throw error;
+
+  if(!data || !data.is_active){
+    throw new Error('كود الخصم غير صحيح أو غير نشط');
+  }
+
+  if(data.expires_at && new Date(data.expires_at) < new Date()){
+    throw new Error('انتهت صلاحية هذا الكوبون');
+  }
+
+  if(subtotal < Number(data.min_order || 0)){
+    throw new Error('الحد الأدنى لاستخدام الكوبون هو ' +
+      Number(data.min_order || 0) + ' جنيه');
+  }
+
+  if(!['percentage','fixed'].includes(data.discount_type)){
+    throw new Error('نوع الخصم في الكوبون غير صحيح');
+  }
+
+  if(Number(data.discount_value) <= 0){
+    throw new Error('قيمة الخصم غير صحيحة');
+  }
+
+  if(data.discount_type === 'percentage' &&
+     Number(data.discount_value) > 100){
+    throw new Error('نسبة الخصم غير صحيحة');
+  }
+
+  return data;
+}
+
+async function applyCoupon(){
+  const input = document.getElementById('couponCode');
+  const message = document.getElementById('couponMessage');
+  const button = document.getElementById('couponButton');
+  const code = input.value.trim().toUpperCase();
+
+  if(!cart.length){
+    message.className = 'coupon-error';
+    message.textContent = 'أضيفي منتجات للسلة أولاً';
+    return;
+  }
+
+  if(!code){
+    message.className = 'coupon-error';
+    message.textContent = 'اكتبي كود الخصم أولاً';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'جاري التحقق...';
+
+  try{
+    const coupon = await fetchValidCoupon(code,getSubtotal());
+
+    appliedCoupon = coupon;
+
+    const discount = calculateDiscount(coupon,getSubtotal());
+
+    message.className = 'coupon-success';
+    message.textContent = 'تم تطبيق الكوبون بنجاح ❤️ خصم ' +
+      discount.toFixed(2) + ' جنيه';
+
+    renderCart();
+
+  }catch(error){
+    appliedCoupon = null;
+    renderCart();
+    message.className = 'coupon-error';
+    message.textContent = error.message || 'تعذر التحقق من الكوبون';
+
+  }finally{
+    button.disabled = false;
+    button.textContent = 'تطبيق';
+  }
+}
+
 function renderCart(){
   const box = document.getElementById('cartItems');
+  const message = document.getElementById('couponMessage');
   box.innerHTML = '';
 
-  let subtotal = 0;
+  const subtotal = getSubtotal();
 
   if(!cart.length){
     box.textContent = 'السلة فارغة';
+
+    if(appliedCoupon){
+      appliedCoupon = null;
+      message.className = '';
+      message.textContent = '';
+    }
+  }
+
+  if(appliedCoupon && subtotal < Number(appliedCoupon.min_order || 0)){
+    appliedCoupon = null;
+    message.className = 'coupon-error';
+    message.textContent = 'تم إلغاء الكوبون لأن قيمة المنتجات أصبحت أقل من الحد الأدنى';
   }
 
   cart.forEach(item=>{
     const p = products.find(x=>String(x.id)===String(item.id));
     if(!p) return;
-
-    subtotal += getPrice(p) * item.qty;
 
     const row = document.createElement('div');
     row.className = 'cart-item';
@@ -375,13 +520,15 @@ function renderCart(){
     box.appendChild(row);
   });
 
+  const discount = calculateDiscount(appliedCoupon,subtotal);
   const shipping = cart.length ? SHIPPING_COST : 0;
-  const finalTotal = subtotal + shipping;
+  const finalTotal = Math.max(0,subtotal - discount) + shipping;
 
   document.getElementById('total').innerHTML =
-    'إجمالي المنتجات: ' + subtotal + ' جنيه' +
+    'إجمالي المنتجات: ' + subtotal.toFixed(2) + ' جنيه' +
+    '<br>الخصم: ' + discount.toFixed(2) + ' جنيه' +
     '<br>الشحن: ' + shipping + ' جنيه' +
-    '<br>الإجمالي النهائي: ' + finalTotal + ' جنيه';
+    '<br>الإجمالي النهائي: ' + finalTotal.toFixed(2) + ' جنيه';
 }
 
 async function sendOrder(){
@@ -436,8 +583,31 @@ async function sendOrder(){
     });
   }
 
+  let couponCode = null;
+  let discount = 0;
+
+  if(appliedCoupon){
+    try{
+      const freshCoupon = await fetchValidCoupon(
+        appliedCoupon.code,
+        subtotal
+      );
+
+      appliedCoupon = freshCoupon;
+      couponCode = freshCoupon.code;
+      discount = calculateDiscount(freshCoupon,subtotal);
+
+    }catch(error){
+      appliedCoupon = null;
+      renderCart();
+      alert('الكوبون لم يعد صالحاً: ' + error.message +
+        '\nراجعي الكوبون ثم حاولي مرة أخرى.');
+      return;
+    }
+  }
+
   const shipping = SHIPPING_COST;
-  const total = subtotal + shipping;
+  const total = Math.max(0,subtotal - discount) + shipping;
 
   const now = new Date();
   const datePart =
@@ -456,7 +626,10 @@ async function sendOrder(){
     address:address,
     items:orderItems,
     total:total,
-    status:'new'
+    status:'new',
+    coupon_code:couponCode,
+    discount_amount:discount,
+    shipping_amount:shipping
   };
 
   const button = document.getElementById('orderButton');
@@ -486,12 +659,21 @@ async function sendOrder(){
         ' = ' + item.subtotal + ' جنيه\n';
     });
 
-    message += '\nإجمالي المنتجات: ' + subtotal + ' جنيه';
+    message += '\nإجمالي المنتجات: ' + subtotal.toFixed(2) + ' جنيه';
+
+    if(couponCode){
+      message += '\nكود الخصم: ' + couponCode;
+    }
+
+    message += '\nقيمة الخصم: ' + discount.toFixed(2) + ' جنيه';
     message += '\nالشحن: ' + shipping + ' جنيه';
-    message += '\nالإجمالي شامل الشحن: ' + total + ' جنيه';
+    message += '\nالإجمالي شامل الشحن: ' + total.toFixed(2) + ' جنيه';
     message += '\n\nبرجاء تأكيد الطلب ❤️';
 
     cart = [];
+    appliedCoupon = null;
+    document.getElementById('couponCode').value = '';
+    document.getElementById('couponMessage').textContent = '';
     renderCart();
 
     alert('تم تسجيل طلبك بنجاح ❤️ رقم الطلب: ' + orderNumber);
