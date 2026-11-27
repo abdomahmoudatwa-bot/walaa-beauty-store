@@ -1,0 +1,368 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>إدارة كوبونات الخصم - WALAA Beauty</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+*{box-sizing:border-box}
+body{
+  font-family:Arial;
+  background:#fff5fa;
+  margin:0;
+  padding:18px;
+  color:#333
+}
+.container{max-width:850px;margin:auto}
+h2{color:#c04480;text-align:center}
+.card{
+  background:white;
+  padding:18px;
+  border-radius:15px;
+  margin-bottom:18px;
+  box-shadow:0 2px 10px #0001
+}
+input,select{
+  width:100%;
+  padding:12px;
+  margin:7px 0 12px;
+  border:1px solid #ddd;
+  border-radius:8px;
+  font-size:16px
+}
+button{
+  border:0;
+  padding:11px 17px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:15px
+}
+.save{background:#c04480;color:white;width:100%}
+.edit{background:#f0a52b;color:white}
+.delete{background:#d94343;color:white}
+.cancel{background:#777;color:white;width:100%;margin-top:8px}
+.coupon{
+  border-bottom:1px solid #eee;
+  padding:15px 0;
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap
+}
+.details{flex:1;min-width:180px}
+.details p{margin:6px 0}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.active{color:green;font-weight:bold}
+.inactive{color:#d94343;font-weight:bold}
+#message{font-weight:bold}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>WALAA Beauty ❤️</h2>
+<h3 style="text-align:center">إدارة كوبونات الخصم</h3>
+
+<div class="card">
+<h3 id="formTitle">إنشاء كوبون جديد</h3>
+
+<label>كود الخصم</label>
+<input id="code" placeholder="مثال: WALAA10">
+
+<label>نوع الخصم</label>
+<select id="discount_type">
+<option value="percentage">نسبة مئوية (%)</option>
+<option value="fixed">مبلغ ثابت (جنيه)</option>
+</select>
+
+<label>قيمة الخصم</label>
+<input id="discount_value" type="number" min="0.01" step="0.01" placeholder="مثال: 10">
+
+<label>الحد الأدنى للطلب (جنيه)</label>
+<input id="min_order" type="number" min="0" value="0">
+
+<label>تاريخ انتهاء الكوبون (اختياري)</label>
+<input id="expires_at" type="datetime-local">
+
+<label>
+<input id="is_active" type="checkbox" checked style="width:auto">
+ الكوبون مفعل
+</label>
+
+<button class="save" onclick="saveCoupon()">حفظ الكوبون</button>
+<button class="cancel" onclick="resetForm()">إلغاء التعديل</button>
+
+<p id="message"></p>
+</div>
+
+<div class="card">
+<h3>الكوبونات الحالية</h3>
+<div id="couponsList">جاري تحميل الكوبونات...</div>
+</div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
+
+//
+  
+const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentCouponId = null;
+
+async function checkAdmin(){
+  const {data:{session},error} = await db.auth.getSession();
+
+  if(error || !session){
+    location.href = 'admin.html';
+    return false;
+  }
+
+  const {data,error:adminError} = await db
+    .from('store_admins')
+    .select('user_id')
+    .eq('user_id',session.user.id)
+    .maybeSingle();
+
+  if(adminError || !data){
+    document.body.innerHTML =
+      '<h3 style="text-align:center;color:red">الحساب غير مسجل كمدير</h3>';
+    return false;
+  }
+
+  return true;
+}
+
+async function loadCoupons(){
+  const list = document.getElementById('couponsList');
+  list.textContent = 'جاري تحميل الكوبونات...';
+
+  const {data,error} = await db
+    .from('coupons')
+    .select('*')
+    .order('id',{ascending:false});
+
+  if(error){
+    list.textContent = 'خطأ في تحميل الكوبونات: ' + error.message;
+    return;
+  }
+
+  if(!data || data.length === 0){
+    list.textContent = 'لا توجد كوبونات حتى الآن';
+    return;
+  }
+
+  list.innerHTML = '';
+
+  data.forEach(coupon=>{
+    const item = document.createElement('div');
+    item.className = 'coupon';
+
+    const details = document.createElement('div');
+    details.className = 'details';
+
+    const name = document.createElement('strong');
+    name.textContent = '🎟️ ' + coupon.code;
+
+    const discount = document.createElement('p');
+    discount.textContent =
+      'الخصم: ' + coupon.discount_value +
+      (coupon.discount_type === 'percentage' ? '%' : ' جنيه');
+
+    const minimum = document.createElement('p');
+    minimum.textContent = 'الحد الأدنى للطلب: ' + coupon.min_order + ' جنيه';
+
+    const expiry = document.createElement('p');
+    expiry.textContent = coupon.expires_at
+      ? 'ينتهي: ' + new Date(coupon.expires_at).toLocaleString('ar-EG')
+      : 'بدون تاريخ انتهاء';
+
+    const status = document.createElement('p');
+    status.className = coupon.is_active ? 'active' : 'inactive';
+
+    const expired = coupon.expires_at &&
+      new Date(coupon.expires_at) <= new Date();
+
+    status.textContent = expired
+      ? 'منتهي الصلاحية'
+      : coupon.is_active ? 'مفعل' : 'متوقف';
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const edit = document.createElement('button');
+    edit.className = 'edit';
+    edit.textContent = 'تعديل';
+    edit.onclick = ()=>editCoupon(coupon);
+
+    const toggle = document.createElement('button');
+    toggle.className = 'cancel';
+    toggle.textContent = coupon.is_active ? 'إيقاف' : 'تفعيل';
+    toggle.onclick = ()=>toggleCoupon(coupon);
+
+    const del = document.createElement('button');
+    del.className = 'delete';
+    del.textContent = 'حذف';
+    del.onclick = ()=>deleteCoupon(coupon.id);
+
+    details.append(name,discount,minimum,expiry,status);
+    actions.append(edit,toggle,del);
+    item.append(details,actions);
+    list.appendChild(item);
+  });
+}
+
+async function saveCoupon(){
+  const message = document.getElementById('message');
+  message.textContent = 'جاري الحفظ...';
+
+  const code = document.getElementById('code').value.trim().toUpperCase();
+  const discount_type = document.getElementById('discount_type').value;
+  const discountValue = document.getElementById('discount_value').value;
+  const discount_value = Number(discountValue);
+  const min_order = Number(document.getElementById('min_order').value);
+  const expiryValue = document.getElementById('expires_at').value;
+  const is_active = document.getElementById('is_active').checked;
+
+  if(!/^[A-Z0-9_-]{3,30}$/.test(code)){
+    message.textContent = 'اكتب كودًا من 3 إلى 30 حرفًا أو رقمًا';
+    return;
+  }
+
+  if(discountValue === '' || !Number.isFinite(discount_value) || discount_value <= 0){
+    message.textContent = 'اكتب قيمة خصم صحيحة';
+    return;
+  }
+
+  if(discount_type === 'percentage' && discount_value > 100){
+    message.textContent = 'النسبة لا يمكن أن تزيد عن 100%';
+    return;
+  }
+
+  if(!Number.isFinite(min_order) || min_order < 0){
+    message.textContent = 'الحد الأدنى غير صحيح';
+    return;
+  }
+
+  const expires_at = expiryValue
+    ? new Date(expiryValue).toISOString()
+    : null;
+
+  if(expiryValue && new Date(expires_at) <= new Date()){
+    message.textContent = 'اختار تاريخ انتهاء في المستقبل';
+    return;
+  }
+
+  const couponData = {
+    code,
+    discount_type,
+    discount_value,
+    min_order,
+    expires_at,
+    is_active
+  };
+
+  let result;
+
+  if(currentCouponId){
+    result = await db.from('coupons')
+      .update(couponData)
+      .eq('id',currentCouponId);
+  }else{
+    result = await db.from('coupons')
+      .insert([couponData]);
+  }
+
+  if(result.error){
+    message.textContent = 'خطأ في الحفظ: ' + result.error.message;
+    return;
+  }
+
+  message.textContent = 'تم حفظ الكوبون بنجاح ❤️';
+  resetForm();
+  await loadCoupons();
+}
+
+function editCoupon(coupon){
+  currentCouponId = coupon.id;
+
+  document.getElementById('formTitle').textContent = 'تعديل الكوبون';
+  document.getElementById('code').value = coupon.code;
+  document.getElementById('discount_type').value = coupon.discount_type;
+  document.getElementById('discount_value').value = coupon.discount_value;
+  document.getElementById('min_order').value = coupon.min_order;
+
+  document.getElementById('expires_at').value =
+    coupon.expires_at
+      ? new Date(new Date(coupon.expires_at).getTime() -
+          new Date(coupon.expires_at).getTimezoneOffset()*60000)
+          .toISOString().slice(0,16)
+      : '';
+
+  document.getElementById('is_active').checked = coupon.is_active;
+  document.getElementById('message').textContent = 'أنت تعدل الكوبون: ' + coupon.code;
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function resetForm(){
+  currentCouponId = null;
+
+  document.getElementById('formTitle').textContent = 'إنشاء كوبون جديد';
+  document.getElementById('code').value = '';
+  document.getElementById('discount_type').value = 'percentage';
+  document.getElementById('discount_value').value = '';
+  document.getElementById('min_order').value = 0;
+  document.getElementById('expires_at').value = '';
+  document.getElementById('is_active').checked = true;
+}
+
+async function toggleCoupon(coupon){
+  const {error} = await db
+    .from('coupons')
+    .update({is_active:!coupon.is_active})
+    .eq('id',coupon.id);
+
+  if(error){
+    alert('خطأ: ' + error.message);
+    return;
+  }
+
+  await loadCoupons();
+}
+
+async function deleteCoupon(id){
+  if(!confirm('هل أنت متأكد من حذف الكوبون؟')) return;
+
+  const {error} = await db
+    .from('coupons')
+    .delete()
+    .eq('id',id);
+
+  if(error){
+    alert('فشل الحذف: ' + error.message);
+    return;
+  }
+
+  alert('تم حذف الكوبون');
+  await loadCoupons();
+}
+
+async function start(){
+  const allowed = await checkAdmin();
+  if(!allowed) return;
+
+  await loadCoupons();
+}
+
+start();
+</script>
+</body>
+</html>
