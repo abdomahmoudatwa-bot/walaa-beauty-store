@@ -17,7 +17,15 @@ h2{margin-top:0}
 button{border:0;background:#8e4778;color:white;padding:12px 18px;border-radius:9px;font-size:15px;cursor:pointer}
 .logout{background:#eee;color:#382536}
 p{line-height:1.7}
-@media(max-width:500px){.grid{grid-template-columns:1fr}}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}
+.stat{background:white;padding:18px;border-radius:13px;box-shadow:0 3px 12px #0001}
+.stat p{color:#8e4778;margin:0 0 10px;font-size:14px}
+.stat strong{font-size:23px;color:#382536}
+.refresh{margin-bottom:15px}
+#statsMessage{font-size:13px;color:#8e4778}
+@media(max-width:500px){
+.grid,.stats{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -30,6 +38,33 @@ p{line-height:1.7}
 <main>
 <h2>أهلاً بك في لوحة التحكم 🌸</h2>
 <p>من هنا تقدر تدير متجرك ومنتجاتك وطلبات العملاء.</p>
+
+<h2>📊 إحصائيات المتجر</h2>
+
+<button class="refresh" id="refreshStats">تحديث الإحصائيات ↻</button>
+<p id="statsMessage">جاري تحميل الإحصائيات...</p>
+
+<div class="stats">
+<div class="stat">
+<p>📦 إجمالي الطلبات</p>
+<strong id="totalOrders">0</strong>
+</div>
+
+<div class="stat">
+<p>🆕 الطلبات الجديدة</p>
+<strong id="newOrders">0</strong>
+</div>
+
+<div class="stat">
+<p>✅ الطلبات المسلّمة</p>
+<strong id="deliveredOrders">0</strong>
+</div>
+
+<div class="stat">
+<p>💰 قيمة المبيعات المسلّمة</p>
+<strong id="salesTotal">0 جنيه</strong>
+</div>
+</div>
 
 <div class="grid">
 
@@ -53,8 +88,7 @@ p{line-height:1.7}
 
 <div class="card">
 <h3>🚚 الشحن</h3>
-<p>تحديد أسعار الشحن للمحافظات.</p>
-<button>إدارة الشحن</button>
+<p>سعر الشحن الموحد لجميع المحافظات: 30 جنيه.</p>
 </div>
 
 </div>
@@ -68,11 +102,11 @@ p{line-height:1.7}
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase=createClient(
-'https://pdgacxtalsihplalxzem.supabase.co',
+'https://pdgacxtalsihplalxzem.
 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
 );
 
-const message=document.getElementById('message');
+const statsMessage=document.getElementById('statsMessage');
 
 const {data:{session},error}=await supabase.auth.getSession();
 
@@ -88,8 +122,47 @@ if(error || !session){
  if(adminError || !admin){
   await supabase.auth.signOut();
   location.href='admin.html';
+ }else{
+  await loadStats();
  }
 }
+
+async function loadStats(){
+ statsMessage.textContent='جاري تحميل الإحصائيات...';
+
+ const {data:orders,error}=await supabase
+  .from('store_orders')
+  .select('total,status');
+
+ if(error){
+  console.error(error);
+  statsMessage.textContent='تعذر تحميل الإحصائيات: '+error.message;
+  return;
+ }
+
+ const list=orders||[];
+
+ const totalOrders=list.length;
+
+ const newOrders=list.filter(o=>o.status==='new').length;
+
+ const delivered=list.filter(o=>o.status==='delivered');
+
+ const sales=delivered.reduce((sum,o)=>{
+  return sum+Number(o.total||0);
+ },0);
+
+ document.getElementById('totalOrders').textContent=totalOrders;
+ document.getElementById('newOrders').textContent=newOrders;
+ document.getElementById('deliveredOrders').textContent=delivered.length;
+
+ document.getElementById('salesTotal').textContent=
+  sales.toLocaleString('ar-EG')+' جنيه';
+
+ statsMessage.textContent='تم تحديث الإحصائيات بنجاح ❤️';
+}
+
+document.getElementById('refreshStats').addEventListener('click',loadStats);
 
 document.getElementById('logout').addEventListener('click',async()=>{
  await supabase.auth.signOut();
