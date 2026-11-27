@@ -37,7 +37,8 @@ h2{font-size:20px;color:#a83270}
 input,textarea,select{width:100%;padding:12px;margin:7px 0 12px;border:1px solid #e7d5df;border-radius:9px;font-size:15px}
 .order{width:100%;padding:14px;background:#168b55;color:white;border:0;border-radius:10px;font-size:16px;font-weight:bold}
 .order:disabled{opacity:.6}
-.total{font-size:19px;color:#a83270;font-weight:bold;margin:15px 0}
+.total{font-size:19px;color:#a83270;font-weight:bold;margin:15px 0;line-height:1.8}
+.shipping-note{color:#168b55;font-size:14px;font-weight:bold}
 .empty{text-align:center;color:#888;padding:20px}
 footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 @media(min-width:650px){.products{grid-template-columns:repeat(4,minmax(0,1fr))}.product img{height:200px}}
@@ -72,7 +73,8 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <section class="cart-box">
 <h2>🛍️ سلة مشترياتك</h2>
 <div id="cartItems" class="empty">السلة فارغة</div>
-<div class="total" id="total">الإجمالي: 0 جنيه</div>
+<div class="total" id="total">إجمالي المنتجات: 0 جنيه<br>الشحن: 30 جنيه<br>الإجمالي النهائي: 30 جنيه</div>
+<p class="shipping-note">🚚 شحن موحّد لجميع محافظات مصر: 30 جنيه</p>
 </section>
 
 <section class="checkout">
@@ -130,6 +132,7 @@ const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
 
 const db = supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const WHATSAPP = '201153123418';
+const SHIPPING_COST = 30;
 
 let products = [];
 let categories = [];
@@ -147,7 +150,6 @@ async function loadStore(){
       .eq('is_active',true);
 
     if(productResult.error) throw productResult.error;
-
     products = productResult.data || [];
 
     const categoryResult = await db
@@ -156,7 +158,6 @@ async function loadStore(){
       .order('name');
 
     if(categoryResult.error) throw categoryResult.error;
-
     categories = categoryResult.data || [];
 
     renderCategories();
@@ -214,9 +215,7 @@ function renderProducts(){
   const filtered = products.filter(p=>{
     const matchesCategory = !selectedCategory ||
       String(p.category_id) === String(selectedCategory);
-
     const matchesSearch = (p.name || '').toLowerCase().includes(search);
-
     return matchesCategory && matchesSearch;
   });
 
@@ -251,11 +250,9 @@ function renderProducts(){
 
     if(p.sale_price !== null && Number(p.sale_price) < Number(p.price)){
       price.textContent = p.sale_price + ' جنيه ';
-
       const old = document.createElement('span');
       old.className = 'old-price';
       old.textContent = p.price + ' جنيه';
-
       price.appendChild(old);
     }else{
       price.textContent = p.price + ' جنيه';
@@ -265,9 +262,7 @@ function renderProducts(){
     add.className = 'add';
     add.textContent = Number(p.stock) <= 0 ? 'غير متوفر' : 'أضيفي للسلة';
     add.disabled = Number(p.stock) <= 0;
-
     if(add.disabled) add.style.opacity = '.5';
-
     add.onclick = ()=>addToCart(p.id);
 
     info.append(name,desc,price,add);
@@ -297,8 +292,7 @@ function addToCart(id){
 
 function changeQty(id,amount){
   const item = cart.find(x=>String(x.id)===String(id));
-  const product = products.find(p=>String(p.id)===String(id));
-
+  const product = products.find(x=>String(x.id)===String(id));
   if(!item || !product) return;
 
   const next = item.qty + amount;
@@ -321,7 +315,7 @@ function renderCart(){
   const box = document.getElementById('cartItems');
   box.innerHTML = '';
 
-  let total = 0;
+  let subtotal = 0;
 
   if(!cart.length){
     box.textContent = 'السلة فارغة';
@@ -331,7 +325,7 @@ function renderCart(){
     const p = products.find(x=>String(x.id)===String(item.id));
     if(!p) return;
 
-    total += getPrice(p) * item.qty;
+    subtotal += getPrice(p) * item.qty;
 
     const row = document.createElement('div');
     row.className = 'cart-item';
@@ -358,8 +352,13 @@ function renderCart(){
     box.appendChild(row);
   });
 
-  document.getElementById('total').textContent =
-    'الإجمالي: ' + total + ' جنيه';
+  const shipping = cart.length ? SHIPPING_COST : 0;
+  const finalTotal = subtotal + shipping;
+
+  document.getElementById('total').innerHTML =
+    'إجمالي المنتجات: ' + subtotal + ' جنيه' +
+    '<br>الشحن: ' + shipping + ' جنيه' +
+    '<br>الإجمالي النهائي: ' + finalTotal + ' جنيه';
 }
 
 async function sendOrder(){
@@ -386,7 +385,7 @@ async function sendOrder(){
   }
 
   const orderItems = [];
-  let total = 0;
+  let subtotal = 0;
 
   for(const item of cart){
     const p = products.find(x=>String(x.id)===String(item.id));
@@ -402,18 +401,20 @@ async function sendOrder(){
     }
 
     const unitPrice = getPrice(p);
-    const subtotal = unitPrice * item.qty;
-
-    total += subtotal;
+    const itemSubtotal = unitPrice * item.qty;
+    subtotal += itemSubtotal;
 
     orderItems.push({
       product_id:p.id,
       name:p.name,
       quantity:item.qty,
       unit_price:unitPrice,
-      subtotal:subtotal
+      subtotal:itemSubtotal
     });
   }
+
+  const shipping = SHIPPING_COST;
+  const total = subtotal + shipping;
 
   const now = new Date();
   const datePart =
@@ -462,8 +463,9 @@ async function sendOrder(){
         ' = ' + item.subtotal + ' جنيه\n';
     });
 
-    message += '\nإجمالي المنتجات: ' + total + ' جنيه';
-    message += '\nالشحن يتم تأكيده حسب المحافظة.';
+    message += '\nإجمالي المنتجات: ' + subtotal + ' جنيه';
+    message += '\nالشحن: ' + shipping + ' جنيه';
+    message += '\nالإجمالي شامل الشحن: ' + total + ' جنيه';
     message += '\n\nبرجاء تأكيد الطلب ❤️';
 
     cart = [];
