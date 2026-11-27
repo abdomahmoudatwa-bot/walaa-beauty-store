@@ -29,13 +29,14 @@ h2{font-size:20px;color:#a83270}
 .description{font-size:12px;color:#887780;min-height:30px;line-height:1.5}
 .price{color:#c04480;font-weight:bold;margin:8px 0}
 .old-price{text-decoration:line-through;color:#999;font-size:12px;margin-right:5px}
-.add{width:100%;background:#c04480;color:white;padding:11px;border-radius:9px}
+.add{width:100%;background:#c04480;color:white;padding:11px;border-radius:9px;border:0}
 .cart-box,.checkout{background:white;padding:15px;border-radius:14px;margin-top:20px;box-shadow:0 2px 9px #0000000d}
 .cart-item{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #eee;padding:12px 0}
 .qty{display:flex;align-items:center;gap:10px}
 .qty button{border:0;background:#f8e1ed;color:#a83270;border-radius:7px;padding:6px 11px}
 input,textarea,select{width:100%;padding:12px;margin:7px 0 12px;border:1px solid #e7d5df;border-radius:9px;font-size:15px}
 .order{width:100%;padding:14px;background:#168b55;color:white;border:0;border-radius:10px;font-size:16px;font-weight:bold}
+.order:disabled{opacity:.6}
 .total{font-size:19px;color:#a83270;font-weight:bold;margin:15px 0}
 .empty{text-align:center;color:#888;padding:20px}
 footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
@@ -55,6 +56,7 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 </section>
 
 <main class="container">
+
 <input class="search" id="search" placeholder="ابحثي عن منتج..." oninput="renderProducts()">
 
 <h2>تسوقي حسب القسم</h2>
@@ -67,7 +69,7 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <div class="empty">جاري تحميل المنتجات...</div>
 </div>
 
-<section class="cart-box" id="cartSection">
+<section class="cart-box">
 <h2>🛍️ سلة مشترياتك</h2>
 <div id="cartItems" class="empty">السلة فارغة</div>
 <div class="total" id="total">الإجمالي: 0 جنيه</div>
@@ -75,8 +77,10 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 
 <section class="checkout">
 <h2>بيانات توصيل الطلب</h2>
+
 <input id="customerName" placeholder="الاسم بالكامل">
 <input id="customerPhone" type="tel" placeholder="رقم الموبايل">
+
 <select id="governorate">
 <option value="">اختاري المحافظة</option>
 <option>القاهرة</option>
@@ -106,8 +110,12 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <option>الوادي الجديد</option>
 <option>مطروح</option>
 </select>
+
 <textarea id="address" placeholder="العنوان بالتفصيل"></textarea>
-<button class="order" onclick="sendOrder()">إتمام الطلب عبر واتساب</button>
+
+<button class="order" id="orderButton" onclick="sendOrder()">
+إتمام الطلب عبر واتساب
+</button>
 </section>
 </main>
 
@@ -118,8 +126,6 @@ WALAA Beauty ❤️<br>
 
 <script>
 const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
-
-
 const SUPABASE_KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
 
 const db = supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -129,31 +135,39 @@ let products = [];
 let categories = [];
 let cart = [];
 let selectedCategory = '';
+let sendingOrder = false;
 
 async function loadStore(){
-  const productResult = await db.from('products')
-    .select('id,name,description,price,sale_price,image_url,category_id,stock,is_active')
-    .eq('is_active',true)
-    .order('id',{ascending:false});
+  const productBox = document.getElementById('products');
 
-  if(productResult.error){
-    document.getElementById('products').textContent =
-      'تعذر تحميل المنتجات. حاولي تحديث الصفحة.';
-    return;
-  }
+  try{
+    const productResult = await db
+      .from('products')
+      .select('id,name,description,price,sale_price,image_url,category_id,stock,is_active')
+      .eq('is_active',true);
 
-  products = productResult.data || [];
+    if(productResult.error) throw productResult.error;
 
-  const categoryResult = await db.from('categories')
-    .select('id,name')
-    .order('name');
+    products = productResult.data || [];
 
-  if(!categoryResult.error){
+    const categoryResult = await db
+      .from('categories')
+      .select('id,name')
+      .order('name');
+
+    if(categoryResult.error) throw categoryResult.error;
+
     categories = categoryResult.data || [];
-    renderCategories();
-  }
 
-  renderProducts();
+    renderCategories();
+    renderProducts();
+    renderCart();
+
+  }catch(error){
+    console.error(error);
+    productBox.innerHTML =
+      '<div class="empty">تعذر تحميل المنتجات. حاولي تحديث الصفحة.</div>';
+  }
 }
 
 function renderCategories(){
@@ -177,9 +191,20 @@ function renderCategories(){
 
 function chooseCategory(id,button){
   selectedCategory = id;
-  document.querySelectorAll('.category').forEach(b=>b.classList.remove('active'));
+
+  document.querySelectorAll('.category').forEach(b=>{
+    b.classList.remove('active');
+  });
+
   button.classList.add('active');
   renderProducts();
+}
+
+function getPrice(product){
+  return product.sale_price !== null &&
+    Number(product.sale_price) < Number(product.price)
+    ? Number(product.sale_price)
+    : Number(product.price);
 }
 
 function renderProducts(){
@@ -189,7 +214,9 @@ function renderProducts(){
   const filtered = products.filter(p=>{
     const matchesCategory = !selectedCategory ||
       String(p.category_id) === String(selectedCategory);
+
     const matchesSearch = (p.name || '').toLowerCase().includes(search);
+
     return matchesCategory && matchesSearch;
   });
 
@@ -224,9 +251,11 @@ function renderProducts(){
 
     if(p.sale_price !== null && Number(p.sale_price) < Number(p.price)){
       price.textContent = p.sale_price + ' جنيه ';
+
       const old = document.createElement('span');
       old.className = 'old-price';
       old.textContent = p.price + ' جنيه';
+
       price.appendChild(old);
     }else{
       price.textContent = p.price + ' جنيه';
@@ -236,7 +265,9 @@ function renderProducts(){
     add.className = 'add';
     add.textContent = Number(p.stock) <= 0 ? 'غير متوفر' : 'أضيفي للسلة';
     add.disabled = Number(p.stock) <= 0;
+
     if(add.disabled) add.style.opacity = '.5';
+
     add.onclick = ()=>addToCart(p.id);
 
     info.append(name,desc,price,add);
@@ -267,31 +298,29 @@ function addToCart(id){
 function changeQty(id,amount){
   const item = cart.find(x=>String(x.id)===String(id));
   const product = products.find(p=>String(p.id)===String(id));
+
   if(!item || !product) return;
 
   const next = item.qty + amount;
+
   if(next > Number(product.stock)){
     alert('وصلتي للكمية المتاحة');
     return;
   }
 
   item.qty = next;
+
   if(item.qty <= 0){
     cart = cart.filter(x=>String(x.id)!==String(id));
   }
-  renderCart();
-}
 
-function getPrice(product){
-  return product.sale_price !== null &&
-    Number(product.sale_price) < Number(product.price)
-    ? Number(product.sale_price)
-    : Number(product.price);
+  renderCart();
 }
 
 function renderCart(){
   const box = document.getElementById('cartItems');
   box.innerHTML = '';
+
   let total = 0;
 
   if(!cart.length){
@@ -333,7 +362,9 @@ function renderCart(){
     'الإجمالي: ' + total + ' جنيه';
 }
 
-function sendOrder(){
+async function sendOrder(){
+  if(sendingOrder) return;
+
   if(!cart.length){
     alert('السلة فارغة، أضيفي منتجات أولاً');
     return;
@@ -354,31 +385,107 @@ function sendOrder(){
     return;
   }
 
+  const orderItems = [];
   let total = 0;
-  let message = 'طلب جديد من WALAA Beauty ❤️\n\n';
-  message += 'الاسم: ' + name + '\n';
-  message += 'الهاتف: ' + phone + '\n';
-  message += 'المحافظة: ' + governorate + '\n';
-  message += 'العنوان: ' + address + '\n\n';
-  message += 'المنتجات:\n';
 
-  cart.forEach(item=>{
+  for(const item of cart){
     const p = products.find(x=>String(x.id)===String(item.id));
-    if(!p) return;
-    const subtotal = getPrice(p) * item.qty;
+
+    if(!p){
+      alert('أحد المنتجات لم يعد متاحًا');
+      return;
+    }
+
+    if(item.qty > Number(p.stock)){
+      alert('الكمية المتاحة من ' + p.name + ' غير كافية');
+      return;
+    }
+
+    const unitPrice = getPrice(p);
+    const subtotal = unitPrice * item.qty;
+
     total += subtotal;
-    message += '- ' + p.name + ' × ' + item.qty +
-      ' = ' + subtotal + ' جنيه\n';
-  });
 
-  message += '\nإجمالي المنتجات: ' + total + ' جنيه';
-  message += '\nالشحن يتم تأكيده حسب المحافظة.';
-  message += '\n\nبرجاء تأكيد الطلب ❤️';
+    orderItems.push({
+      product_id:p.id,
+      name:p.name,
+      quantity:item.qty,
+      unit_price:unitPrice,
+      subtotal:subtotal
+    });
+  }
 
-  window.open(
-    'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(message),
-    '_blank'
-  );
+  const now = new Date();
+  const datePart =
+    String(now.getFullYear()).slice(-2) +
+    String(now.getMonth()+1).padStart(2,'0') +
+    String(now.getDate()).padStart(2,'0');
+
+  const randomPart = Math.random().toString(36).slice(2,8).toUpperCase();
+  const orderNumber = 'WAL-' + datePart + '-' + randomPart;
+
+  const orderData = {
+    order_number:orderNumber,
+    customer_name:name,
+    phone:phone,
+    governorate:governorate,
+    address:address,
+    items:orderItems,
+    total:total,
+    status:'new'
+  };
+
+  const button = document.getElementById('orderButton');
+
+  sendingOrder = true;
+  button.disabled = true;
+  button.textContent = 'جاري تسجيل الطلب...';
+
+  try{
+    const {error} = await db
+      .from('store_orders')
+      .insert([orderData]);
+
+    if(error) throw error;
+
+    let message = 'طلب جديد من WALAA Beauty ❤️\n\n';
+    message += 'رقم الطلب: ' + orderNumber + '\n';
+    message += 'الاسم: ' + name + '\n';
+    message += 'الهاتف: ' + phone + '\n';
+    message += 'المحافظة: ' + governorate + '\n';
+    message += 'العنوان: ' + address + '\n\n';
+    message += 'المنتجات:\n';
+
+    orderItems.forEach(item=>{
+      message += '- ' + item.name +
+        ' × ' + item.quantity +
+        ' = ' + item.subtotal + ' جنيه\n';
+    });
+
+    message += '\nإجمالي المنتجات: ' + total + ' جنيه';
+    message += '\nالشحن يتم تأكيده حسب المحافظة.';
+    message += '\n\nبرجاء تأكيد الطلب ❤️';
+
+    cart = [];
+    renderCart();
+
+    alert('تم تسجيل طلبك بنجاح ❤️ رقم الطلب: ' + orderNumber);
+
+    const whatsappUrl =
+      'https://wa.me/' + WHATSAPP +
+      '?text=' + encodeURIComponent(message);
+
+    window.location.href = whatsappUrl;
+
+  }catch(error){
+    console.error(error);
+    alert('تعذر تسجيل الطلب: ' + (error.message || 'حدث خطأ غير معروف'));
+
+  }finally{
+    sendingOrder = false;
+    button.disabled = false;
+    button.textContent = 'إتمام الطلب عبر واتساب';
+  }
 }
 
 loadStore();
