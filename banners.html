@@ -14,11 +14,12 @@ h2{text-align:center;color:#a52c70}
 .card{background:white;padding:18px;border-radius:16px;margin:15px 0;box-shadow:0 3px 15px #0000000d}
 input,textarea,button{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:9px;font-size:15px}
 button{background:#a52c70;color:white;border:0;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
 button.delete{background:#b42318}
 button.secondary{background:#555}
 .banner{border:1px solid #eee;padding:12px;border-radius:12px;margin:12px 0}
 .banner img{width:100%;max-height:220px;object-fit:cover;border-radius:10px}
-small{color:#777}
+#message,#banners{white-space:pre-wrap;line-height:1.8}
 </style>
 </head>
 <body>
@@ -38,148 +39,259 @@ small{color:#777}
 <label>تاريخ نهاية العرض</label>
 <input id="end" type="datetime-local">
 <input id="order" type="number" value="0" placeholder="ترتيب الإعلان">
-<button onclick="addBanner()">حفظ الإعلان</button>
-<p id="message"></p>
+<button id="saveBtn" type="button">حفظ الإعلان</button>
+<p id="message">جاري تجهيز الصفحة...</p>
 </div>
 
 <div class="card">
 <h3>الإعلانات الحالية</h3>
-<div id="banners">جاري تحميل الإعلانات...</div>
+<div id="banners">في انتظار الاتصال...</div>
 </div>
 
-<button class="secondary" onclick="location.href='dashboard.html'">العودة للوحة التحكم</button>
+<button class="secondary" type="button" id="backBtn">العودة للوحة التحكم</button>
 </div>
 
 <script>
-const supabase = window.supabase.createClient(
-'https://pdgacxtalsihplalxzem.supabase.co',
-'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
-);
+const URL = 'https://pdgacxtalsihplalxzem.supabase.co';
+const KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
+
+let db = null;
+
+const msg = document.getElementById('message');
+const box = document.getElementById('banners');
+const saveBtn = document.getElementById('saveBtn');
+
+function showMessage(text){
+ msg.textContent = text;
+}
+
+function withTimeout(promise){
+ return Promise.race([
+  promise,
+  new Promise((_,reject)=>
+   setTimeout(()=>reject(new Error('الاتصال استغرق وقتًا طويلًا. حدّث الصفحة وحاول مرة أخرى.')),15000)
+  )
+ ]);
+}
 
 async function checkAdmin(){
- const {data:{session},error}=await supabase.auth.getSession();
- if(error || !session){
-  document.body.innerHTML='<h2>يجب تسجيل الدخول أولاً</h2><p style="text-align:center"><a href="admin.html">العودة لتسجيل الدخول</a></p>';
-  return false;
- }
- const {data,error:adminError}=await supabase
- .from('store_admins')
- .select('user_id')
- .eq('user_id',session.user.id)
- .maybeSingle();
+ try{
+  if(!window.supabase){
+   throw new Error('مكتبة Supabase لم يتم تحميلها. افتح الصفحة بعد تحديثها.');
+  }
 
- if(adminError || !data){
-  document.body.innerHTML='<h2>ليس لديك صلاحية إدارة الإعلانات</h2>';
+  db = window.supabase.createClient(URL,KEY);
+
+  showMessage('جاري التحقق من تسجيل الدخول...');
+
+  const result = await withTimeout(db.auth.getSession());
+
+  if(result.error) throw result.error;
+
+  const session = result.data.session;
+
+  if(!session){
+   showMessage('لم يتم العثور على جلسة تسجيل دخول. سجّل الدخول أولًا من لوحة الإدارة.');
+   return false;
+  }
+
+  showMessage('جاري التحقق من صلاحيات الإدارة...');
+
+  const adminResult = await withTimeout(
+   db.from('store_admins')
+   .select('user_id')
+   .eq('user_id',session.user.id)
+   .maybeSingle()
+  );
+
+  if(adminResult.error) throw adminResult.error;
+
+  if(!adminResult.data){
+   showMessage('هذا الحساب ليس لديه صلاحية إدارة الإعلانات.');
+   return false;
+  }
+
+  return true;
+
+ }catch(error){
+  showMessage('خطأ في التحقق: '+error.message);
   return false;
  }
- return true;
 }
 
 async function addBanner(){
- const msg=document.getElementById('message');
- msg.textContent='جاري الحفظ...';
+ saveBtn.disabled = true;
 
- const file=document.getElementById('image').files[0];
- if(!file){msg.textContent='من فضلك اختر صورة الإعلان';return;}
+ try{
+  showMessage('جاري تجهيز الإعلان...');
 
- const safeName=Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
- const {error:uploadError}=await supabase.storage
- .from('banners').upload(safeName,file);
+  const file = document.getElementById('image').files[0];
 
- if(uploadError){msg.textContent='خطأ رفع الصورة: '+uploadError.message;return;}
+  if(!file){
+   showMessage('من فضلك اختر صورة الإعلان أولًا.');
+   return;
+  }
 
- const {data:urlData}=supabase.storage.from('banners').getPublicUrl(safeName);
+  if(!file.type.startsWith('image/')){
+   showMessage('الملف المختار ليس صورة.');
+   return;
+  }
 
- const startValue=document.getElementById('start').value;
- const endValue=document.getElementById('end').value;
+  const safeName = Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
 
- const {error}=await supabase.from('banners').insert([{
-  title:document.getElementById('title').value,
-  subtitle:document.getElementById('subtitle').value,
-  image_url:urlData.publicUrl,
-  button_text:document.getElementById('buttonText').value,
-  button_link:document.getElementById('buttonLink').value,
-  sort_order:Number(document.getElementById('order').value)||0,
-  start_at:startValue?new Date(startValue).toISOString():null,
-  end_at:endValue?new Date(endValue).toISOString():null,
-  is_active:true
- }]);
+  showMessage('جاري رفع الصورة...');
 
- if(error){msg.textContent='خطأ حفظ الإعلان: '+error.message;return;}
+  const upload = await withTimeout(
+   db.storage.from('banners').upload(safeName,file)
+  );
 
- msg.textContent='تم حفظ الإعلان بنجاح ✅';
- document.getElementById('title').value='';
- document.getElementById('subtitle').value='';
- document.getElementById('buttonText').value='';
- document.getElementById('buttonLink').value='';
- document.getElementById('image').value='';
- document.getElementById('start').value='';
- document.getElementById('end').value='';
- loadBanners();
+  if(upload.error) throw upload.error;
+
+  const publicUrl = db.storage.from('banners').getPublicUrl(safeName).data.publicUrl;
+
+  const startValue = document.getElementById('start').value;
+  const endValue = document.getElementById('end').value;
+
+  if(startValue && endValue && new Date(endValue) <= new Date(startValue)){
+   throw new Error('تاريخ نهاية العرض يجب أن يكون بعد تاريخ البداية.');
+  }
+
+  showMessage('جاري حفظ بيانات الإعلان...');
+
+  const result = await withTimeout(
+   db.from('banners').insert([{
+    title:document.getElementById('title').value,
+    subtitle:document.getElementById('subtitle').value,
+    image_url:publicUrl,
+    button_text:document.getElementById('buttonText').value,
+    button_link:document.getElementById('buttonLink').value,
+    sort_order:Number(document.getElementById('order').value)||0,
+    start_at:startValue?new Date(startValue).toISOString():null,
+    end_at:endValue?new Date(endValue).toISOString():null,
+    is_active:true
+   }])
+  );
+
+  if(result.error) throw result.error;
+
+  showMessage('تم حفظ الإعلان بنجاح ✅');
+
+  document.getElementById('title').value='';
+  document.getElementById('subtitle').value='';
+  document.getElementById('buttonText').value='';
+  document.getElementById('buttonLink').value='';
+  document.getElementById('image').value='';
+  document.getElementById('start').value='';
+  document.getElementById('end').value='';
+
+  await loadBanners();
+
+ }catch(error){
+  showMessage('تعذر حفظ الإعلان:\n'+error.message);
+ }finally{
+  saveBtn.disabled = false;
+ }
 }
 
 async function loadBanners(){
- const box=document.getElementById('banners');
- const {data,error}=await supabase.from('banners')
- .select('*').order('sort_order',{ascending:true});
+ try{
+  box.textContent='جاري تحميل الإعلانات...';
 
- if(error){box.textContent='خطأ تحميل الإعلانات: '+error.message;return;}
- if(!data.length){box.textContent='لا توجد إعلانات حتى الآن';return;}
+  const result = await withTimeout(
+   db.from('banners').select('*').order('sort_order',{ascending:true})
+  );
 
- box.innerHTML='';
- data.forEach(b=>{
-  const item=document.createElement('div');
-  item.className='banner';
+  if(result.error) throw result.error;
 
-  const img=document.createElement('img');
-  img.src=b.image_url;
-  img.alt=b.title||'إعلان';
-  item.appendChild(img);
+  const data = result.data;
 
-  const heading=document.createElement('h3');
-  heading.textContent=b.title||'إعلان بدون عنوان';
-  item.appendChild(heading);
+  if(!data || data.length===0){
+   box.textContent='لا توجد إعلانات حتى الآن.';
+   return;
+  }
 
-  const desc=document.createElement('p');
-  desc.textContent=b.subtitle||'';
-  item.appendChild(desc);
+  box.innerHTML='';
 
-  const status=document.createElement('p');
-  status.textContent=b.is_active?'🟢 نشط':'🔴 متوقف';
-  item.appendChild(status);
+  data.forEach(b=>{
+   const item=document.createElement('div');
+   item.className='banner';
 
-  const toggle=document.createElement('button');
-  toggle.textContent=b.is_active?'إيقاف الإعلان':'تفعيل الإعلان';
-  toggle.className='secondary';
-  toggle.onclick=()=>toggleBanner(b.id,!b.is_active);
-  item.appendChild(toggle);
+   const img=document.createElement('img');
+   img.src=b.image_url;
+   img.alt=b.title||'إعلان';
+   item.appendChild(img);
 
-  const del=document.createElement('button');
-  del.textContent='حذف الإعلان';
-  del.className='delete';
-  del.onclick=()=>deleteBanner(b.id);
-  item.appendChild(del);
+   const heading=document.createElement('h3');
+   heading.textContent=b.title||'إعلان بدون عنوان';
+   item.appendChild(heading);
 
-  box.appendChild(item);
- });
+   const desc=document.createElement('p');
+   desc.textContent=b.subtitle||'';
+   item.appendChild(desc);
+
+   const status=document.createElement('p');
+   status.textContent=b.is_active?'🟢 نشط':'🔴 متوقف';
+   item.appendChild(status);
+
+   const toggle=document.createElement('button');
+   toggle.textContent=b.is_active?'إيقاف الإعلان':'تفعيل الإعلان';
+   toggle.className='secondary';
+   toggle.onclick=()=>toggleBanner(b.id,!b.is_active);
+   item.appendChild(toggle);
+
+   const del=document.createElement('button');
+   del.textContent='حذف الإعلان';
+   del.className='delete';
+   del.onclick=()=>deleteBanner(b.id);
+   item.appendChild(del);
+
+   box.appendChild(item);
+  });
+
+ }catch(error){
+  box.textContent='خطأ تحميل الإعلانات:\n'+error.message;
+ }
 }
 
 async function toggleBanner(id,status){
- const {error}=await supabase.from('banners')
- .update({is_active:status}).eq('id',id);
- if(error){alert(error.message);return;}
- loadBanners();
+ try{
+  const result=await withTimeout(
+   db.from('banners').update({is_active:status}).eq('id',id)
+  );
+  if(result.error) throw result.error;
+  await loadBanners();
+ }catch(error){
+  alert('خطأ تغيير حالة الإعلان: '+error.message);
+ }
 }
 
 async function deleteBanner(id){
- if(!confirm('هل تريد حذف الإعلان؟'))return;
- const {error}=await supabase.from('banners').delete().eq('id',id);
- if(error){alert(error.message);return;}
- loadBanners();
+ if(!confirm('هل تريد حذف الإعلان؟')) return;
+
+ try{
+  const result=await withTimeout(
+   db.from('banners').delete().eq('id',id)
+  );
+  if(result.error) throw result.error;
+  await loadBanners();
+ }catch(error){
+  alert('خطأ حذف الإعلان: '+error.message);
+ }
 }
 
+saveBtn.addEventListener('click',addBanner);
+
+document.getElementById('backBtn').addEventListener('click',()=>{
+ location.href='dashboard.html';
+});
+
 (async()=>{
- if(await checkAdmin())loadBanners();
+ const allowed=await checkAdmin();
+
+ if(allowed){
+  showMessage('تم التحقق من الحساب بنجاح ✅');
+  await loadBanners();
+ }
 })();
 </script>
 </body>
