@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>إدارة الإعلانات | WALAA Beauty</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff5fa;color:#382536;font-family:Arial;padding:18px}
+.container{max-width:850px;margin:auto}
+h2{text-align:center;color:#a52c70}
+.card{background:white;padding:18px;border-radius:16px;margin:15px 0;box-shadow:0 3px 15px #0000000d}
+input,textarea,button{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:9px;font-size:15px}
+button{background:#a52c70;color:white;border:0;font-weight:bold;cursor:pointer}
+button.delete{background:#b42318}
+button.secondary{background:#555}
+.banner{border:1px solid #eee;padding:12px;border-radius:12px;margin:12px 0}
+.banner img{width:100%;max-height:220px;object-fit:cover;border-radius:10px}
+small{color:#777}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>🎯 إدارة الإعلانات والعروض</h2>
+
+<div class="card">
+<h3>إضافة إعلان جديد</h3>
+<input id="title" placeholder="عنوان الإعلان">
+<textarea id="subtitle" placeholder="وصف الإعلان أو تفاصيل العرض"></textarea>
+<input id="buttonText" placeholder="نص الزر مثل: تسوقي الآن">
+<input id="buttonLink" placeholder="رابط الزر (اختياري)">
+<label>صورة الإعلان</label>
+<input id="image" type="file" accept="image/*">
+<label>تاريخ بداية العرض</label>
+<input id="start" type="datetime-local">
+<label>تاريخ نهاية العرض</label>
+<input id="end" type="datetime-local">
+<input id="order" type="number" value="0" placeholder="ترتيب الإعلان">
+<button onclick="addBanner()">حفظ الإعلان</button>
+<p id="message"></p>
+</div>
+
+<div class="card">
+<h3>الإعلانات الحالية</h3>
+<div id="banners">جاري تحميل الإعلانات...</div>
+</div>
+
+<button class="secondary" onclick="location.href='dashboard.html'">العودة للوحة التحكم</button>
+</div>
+
+<script>
+const supabase = window.supabase.createClient(
+'https://pdgacxtalsihplalxzem.supabase.co',
+'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
+);
+
+async function checkAdmin(){
+ const {data:{session},error}=await supabase.auth.getSession();
+ if(error || !session){
+  document.body.innerHTML='<h2>يجب تسجيل الدخول أولاً</h2><p style="text-align:center"><a href="admin.html">العودة لتسجيل الدخول</a></p>';
+  return false;
+ }
+ const {data,error:adminError}=await supabase
+ .from('store_admins')
+ .select('user_id')
+ .eq('user_id',session.user.id)
+ .maybeSingle();
+
+ if(adminError || !data){
+  document.body.innerHTML='<h2>ليس لديك صلاحية إدارة الإعلانات</h2>';
+  return false;
+ }
+ return true;
+}
+
+async function addBanner(){
+ const msg=document.getElementById('message');
+ msg.textContent='جاري الحفظ...';
+
+ const file=document.getElementById('image').files[0];
+ if(!file){msg.textContent='من فضلك اختر صورة الإعلان';return;}
+
+ const safeName=Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+ const {error:uploadError}=await supabase.storage
+ .from('banners').upload(safeName,file);
+
+ if(uploadError){msg.textContent='خطأ رفع الصورة: '+uploadError.message;return;}
+
+ const {data:urlData}=supabase.storage.from('banners').getPublicUrl(safeName);
+
+ const startValue=document.getElementById('start').value;
+ const endValue=document.getElementById('end').value;
+
+ const {error}=await supabase.from('banners').insert([{
+  title:document.getElementById('title').value,
+  subtitle:document.getElementById('subtitle').value,
+  image_url:urlData.publicUrl,
+  button_text:document.getElementById('buttonText').value,
+  button_link:document.getElementById('buttonLink').value,
+  sort_order:Number(document.getElementById('order').value)||0,
+  start_at:startValue?new Date(startValue).toISOString():null,
+  end_at:endValue?new Date(endValue).toISOString():null,
+  is_active:true
+ }]);
+
+ if(error){msg.textContent='خطأ حفظ الإعلان: '+error.message;return;}
+
+ msg.textContent='تم حفظ الإعلان بنجاح ✅';
+ document.getElementById('title').value='';
+ document.getElementById('subtitle').value='';
+ document.getElementById('buttonText').value='';
+ document.getElementById('buttonLink').value='';
+ document.getElementById('image').value='';
+ document.getElementById('start').value='';
+ document.getElementById('end').value='';
+ loadBanners();
+}
+
+async function loadBanners(){
+ const box=document.getElementById('banners');
+ const {data,error}=await supabase.from('banners')
+ .select('*').order('sort_order',{ascending:true});
+
+ if(error){box.textContent='خطأ تحميل الإعلانات: '+error.message;return;}
+ if(!data.length){box.textContent='لا توجد إعلانات حتى الآن';return;}
+
+ box.innerHTML='';
+ data.forEach(b=>{
+  const item=document.createElement('div');
+  item.className='banner';
+
+  const img=document.createElement('img');
+  img.src=b.image_url;
+  img.alt=b.title||'إعلان';
+  item.appendChild(img);
+
+  const heading=document.createElement('h3');
+  heading.textContent=b.title||'إعلان بدون عنوان';
+  item.appendChild(heading);
+
+  const desc=document.createElement('p');
+  desc.textContent=b.subtitle||'';
+  item.appendChild(desc);
+
+  const status=document.createElement('p');
+  status.textContent=b.is_active?'🟢 نشط':'🔴 متوقف';
+  item.appendChild(status);
+
+  const toggle=document.createElement('button');
+  toggle.textContent=b.is_active?'إيقاف الإعلان':'تفعيل الإعلان';
+  toggle.className='secondary';
+  toggle.onclick=()=>toggleBanner(b.id,!b.is_active);
+  item.appendChild(toggle);
+
+  const del=document.createElement('button');
+  del.textContent='حذف الإعلان';
+  del.className='delete';
+  del.onclick=()=>deleteBanner(b.id);
+  item.appendChild(del);
+
+  box.appendChild(item);
+ });
+}
+
+async function toggleBanner(id,status){
+ const {error}=await supabase.from('banners')
+ .update({is_active:status}).eq('id',id);
+ if(error){alert(error.message);return;}
+ loadBanners();
+}
+
+async function deleteBanner(id){
+ if(!confirm('هل تريد حذف الإعلان؟'))return;
+ const {error}=await supabase.from('banners').delete().eq('id',id);
+ if(error){alert(error.message);return;}
+ loadBanners();
+}
+
+(async()=>{
+ if(await checkAdmin())loadBanners();
+})();
+</script>
+</body>
+</html>
