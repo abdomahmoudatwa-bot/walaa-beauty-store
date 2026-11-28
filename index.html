@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -90,9 +91,7 @@ input,textarea,select{width:100%;padding:12px;margin:7px 0 12px;border:1px solid
   border-radius:9px;
   font-weight:bold;
 }
-.store-banner-info a:active{
-  opacity:.8;
-}
+.store-banner-info a:active{opacity:.8}
 
 footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 
@@ -115,7 +114,6 @@ footer{text-align:center;padding:25px;color:#997d8b;font-size:13px}
 <p>اكتشفي أجمل منتجات التجميل والعناية بالبشرة والشعر<br>توصيل لجميع محافظات مصر</p>
 </section>
 
-<!-- مكان عرض الإعلانات -->
 <section class="store-banners" id="storeBanners" style="display:none">
   <div id="storeBannersList"></div>
 </section>
@@ -220,17 +218,20 @@ let selectedCategory = '';
 let sendingOrder = false;
 let appliedCoupon = null;
 
-/* تحميل الإعلانات من Supabase */
+/* تحميل الإعلانات */
 async function loadBanners(){
 
   const section = document.getElementById('storeBanners');
   const box = document.getElementById('storeBannersList');
 
-  try{
+  section.style.display = 'block';
+  box.innerHTML = '<div class="empty">جاري تحميل الإعلانات...</div>';
+
+  try {
 
     const {data,error} = await db
       .from('banners')
-      .select('id,title,subtitle,image_url,button_text,button_link,sort_order,start_at,end_at')
+      .select('id,title,subtitle,image_url,button_text,button_link,sort_order,is_active,start_at,end_at')
       .eq('is_active',true)
       .order('sort_order',{ascending:true});
 
@@ -241,56 +242,65 @@ async function loadBanners(){
     const activeBanners = (data || []).filter(b=>{
       const starts = !b.start_at || new Date(b.start_at) <= now;
       const notEnded = !b.end_at || new Date(b.end_at) >= now;
-      return starts && notEnded && b.image_url;
+      return starts && notEnded;
     });
 
-    box.innerHTML='';
+    box.innerHTML = '';
 
     if(!activeBanners.length){
-      section.style.display='none';
+      const message = document.createElement('div');
+      message.className = 'empty';
+      message.textContent = 'لا توجد إعلانات نشطة حاليًا.';
+      box.appendChild(message);
       return;
     }
 
     activeBanners.forEach(b=>{
 
       const card = document.createElement('div');
-      card.className='store-banner';
+      card.className = 'store-banner';
 
-      const img = document.createElement('img');
-      img.src=b.image_url;
-      img.alt=b.title || 'عرض من WALAA Beauty';
-      img.loading='lazy';
+      if(b.image_url){
+        const img = document.createElement('img');
+        img.src = b.image_url;
+        img.alt = b.title || 'عرض من WALAA Beauty';
+        img.loading = 'lazy';
 
-      img.onerror=()=>{
-        card.style.display='none';
-      };
+        img.onerror = function(){
+          this.style.display = 'none';
+          const warning = document.createElement('p');
+          warning.textContent = 'تعذر تحميل صورة الإعلان. راجع رابط الصورة.';
+          warning.style.color = 'red';
+          warning.style.textAlign = 'center';
+          card.appendChild(warning);
+        };
 
-      card.appendChild(img);
+        card.appendChild(img);
+      }
 
       const info = document.createElement('div');
-      info.className='store-banner-info';
+      info.className = 'store-banner-info';
 
       if(b.title){
-        const title=document.createElement('h2');
-        title.textContent=b.title;
+        const title = document.createElement('h2');
+        title.textContent = b.title;
         info.appendChild(title);
       }
 
       if(b.subtitle){
-        const description=document.createElement('p');
-        description.textContent=b.subtitle;
+        const description = document.createElement('p');
+        description.textContent = b.subtitle;
         info.appendChild(description);
       }
 
       if(b.button_text && b.button_link){
-
-        const button=document.createElement('a');
-        button.textContent=b.button_text;
-        button.href=b.button_link;
+        const button = document.createElement('a');
+        button.textContent = b.button_text;
+        button.href = b.button_link;
 
         if(/^https?:\/\//i.test(b.button_link)){
-          button.target='_blank';
-          button.rel='noopener noreferrer';
+          button.target = '_blank';
+          button.rel = 'noopener noreferrer';
         }
 
         info.appendChild(button);
@@ -300,16 +310,34 @@ async function loadBanners(){
         card.appendChild(info);
       }
 
+      if(!b.image_url && !b.title && !b.subtitle){
+        card.textContent = 'إعلان من WALAA Beauty';
+      }
+
       box.appendChild(card);
     });
 
-    section.style.display='block';
+  } catch(error) {
 
-  }catch(error){
+    console.error('Banner Loading Error:',error);
 
-    console.error('Banner loading error:',error);
-    section.style.display='none';
+    box.innerHTML = '';
 
+    const message = document.createElement('div');
+    message.style.cssText =
+      'background:white;padding:20px;border-radius:12px;color:#c03958;text-align:center;direction:rtl;';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'حدث خطأ أثناء تحميل الإعلانات';
+
+    const details = document.createElement('p');
+    details.textContent = error.message || String(error);
+
+    const code = document.createElement('p');
+    code.textContent = 'كود الخطأ: ' + (error.code || 'غير معروف');
+
+    message.append(heading,details,code);
+    box.appendChild(message);
   }
 }
 
@@ -862,7 +890,7 @@ async function sendOrder(){
   }
 }
 
-/* تشغيل تحميل المتجر والإعلانات */
+/* تشغيل المتجر والإعلانات */
 loadStore();
 loadBanners();
 
