@@ -59,7 +59,7 @@ button.secondary{background:#555}
 </div>
 
 <script>
-const URL = 'https://pdgacxtalsihplalxzem.supabase.co';
+const SUPABASE_URL = 'https://pdgacxtalsihplalxzem.supabase.co';
 const KEY = 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL';
 
 let db = null;
@@ -87,7 +87,7 @@ async function checkAdmin(){
    throw new Error('مكتبة Supabase لم يتم تحميلها.');
   }
 
-  db = window.supabase.createClient(URL,KEY);
+  db = window.supabase.createClient(SUPABASE_URL,KEY);
 
   showMessage('جاري التحقق من تسجيل الدخول...');
 
