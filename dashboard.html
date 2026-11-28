@@ -91,6 +91,12 @@ p{line-height:1.7}
 <p>سعر الشحن الموحد لجميع المحافظات: 30 جنيه.</p>
 </div>
 
+<div class="card">
+<h3>🎯 الإعلانات والعروض</h3>
+<p>إضافة صور العروض والخصومات والبونص والتحكم في السلايدر الرئيسي.</p>
+<button onclick="location.href='banners.html'">إدارة الإعلانات</button>
+</div>
+
 </div>
 
 <br>
@@ -102,7 +108,7 @@ p{line-height:1.7}
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase=createClient(
-'https://pdgacxtalsihplalxzem.
+'https://pdgacxtalsihplalxzem.supabase.co',
 'sb_publishable_WR1BKSI9cEDKRcS8NqDUFg_MHaFM7VL'
 );
 
@@ -141,11 +147,8 @@ async function loadStats(){
  }
 
  const list=orders||[];
-
  const totalOrders=list.length;
-
  const newOrders=list.filter(o=>o.status==='new').length;
-
  const delivered=list.filter(o=>o.status==='delivered');
 
  const sales=delivered.reduce((sum,o)=>{
@@ -155,14 +158,14 @@ async function loadStats(){
  document.getElementById('totalOrders').textContent=totalOrders;
  document.getElementById('newOrders').textContent=newOrders;
  document.getElementById('deliveredOrders').textContent=delivered.length;
-
  document.getElementById('salesTotal').textContent=
-  sales.toLocaleString('ar-EG')+' جنيه';
+ sales.toLocaleString('ar-EG')+' جنيه';
 
  statsMessage.textContent='تم تحديث الإحصائيات بنجاح ❤️';
 }
 
-document.getElementById('refreshStats').addEventListener('click',loadStats);
+document.getElementById('refreshStats')
+.addEventListener('click',loadStats);
 
 document.getElementById('logout').addEventListener('click',async()=>{
  await supabase.auth.signOut();
@@ -172,3 +175,4 @@ document.getElementById('logout').addEventListener('click',async()=>{
 
 </body>
 </html>
+
