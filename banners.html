@@ -23,22 +23,29 @@ button.secondary{background:#555}
 </style>
 </head>
 <body>
+
 <div class="container">
 <h2>🎯 إدارة الإعلانات والعروض</h2>
 
 <div class="card">
 <h3>إضافة إعلان جديد</h3>
+
 <input id="title" placeholder="عنوان الإعلان">
 <textarea id="subtitle" placeholder="وصف الإعلان أو تفاصيل العرض"></textarea>
 <input id="buttonText" placeholder="نص الزر مثل: تسوقي الآن">
 <input id="buttonLink" placeholder="رابط الزر (اختياري)">
+
 <label>صورة الإعلان</label>
 <input id="image" type="file" accept="image/*">
+
 <label>تاريخ بداية العرض</label>
 <input id="start" type="datetime-local">
+
 <label>تاريخ نهاية العرض</label>
 <input id="end" type="datetime-local">
+
 <input id="order" type="number" value="0" placeholder="ترتيب الإعلان">
+
 <button id="saveBtn" type="button">حفظ الإعلان</button>
 <p id="message">جاري تجهيز الصفحة...</p>
 </div>
@@ -68,16 +75,16 @@ function showMessage(text){
 function withTimeout(promise){
  return Promise.race([
   promise,
-  new Promise((_,reject)=>
-   setTimeout(()=>reject(new Error('الاتصال استغرق وقتًا طويلًا. حدّث الصفحة وحاول مرة أخرى.')),15000)
-  )
+  new Promise((_,reject)=>{
+   setTimeout(()=>reject(new Error('الاتصال استغرق وقتًا طويلًا. حدّث الصفحة وحاول مرة أخرى.')),15000);
+  })
  ]);
 }
 
 async function checkAdmin(){
  try{
   if(!window.supabase){
-   throw new Error('مكتبة Supabase لم يتم تحميلها. افتح الصفحة بعد تحديثها.');
+   throw new Error('مكتبة Supabase لم يتم تحميلها.');
   }
 
   db = window.supabase.createClient(URL,KEY);
@@ -258,8 +265,11 @@ async function toggleBanner(id,status){
   const result=await withTimeout(
    db.from('banners').update({is_active:status}).eq('id',id)
   );
+
   if(result.error) throw result.error;
+
   await loadBanners();
+
  }catch(error){
   alert('خطأ تغيير حالة الإعلان: '+error.message);
  }
@@ -272,8 +282,11 @@ async function deleteBanner(id){
   const result=await withTimeout(
    db.from('banners').delete().eq('id',id)
   );
+
   if(result.error) throw result.error;
+
   await loadBanners();
+
  }catch(error){
   alert('خطأ حذف الإعلان: '+error.message);
  }
@@ -294,5 +307,6 @@ document.getElementById('backBtn').addEventListener('click',()=>{
  }
 })();
 </script>
+
 </body>
 </html>
